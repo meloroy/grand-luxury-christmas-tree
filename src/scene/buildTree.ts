@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { TREE_HEIGHT, TREE_Y0 } from './constants'
 import { createDual, writeColor, writeQuat, writeScale, writeVec3, type DualBuffers } from './dualTransform'
+import { getQuality } from './quality'
 import { mulberry32, range, type Rng } from './rng'
 import {
   outwardQuaternion,
@@ -352,10 +353,11 @@ export function getTreeData() {
 }
 
 function createTreeData(): TreeData {
-  const chrome = buildBaubles(84, 11, CHROME, 0.12, 0.94, 0.22)
-  const jewel = buildBaubles(62, 19, JEWEL, 0.1, 0.9, 0.24)
-  const paper = buildGifts(16, 29, PAPER, false)
-  const metal = buildGifts(6, 31, METAL_GIFT, true)
+  const quality = getQuality()
+  const chrome = buildBaubles(quality.chrome, 11, CHROME, 0.12, 0.94, 0.22)
+  const jewel = buildBaubles(quality.jewel, 19, JEWEL, 0.1, 0.9, 0.24)
+  const paper = buildGifts(quality.paperGifts, 29, PAPER, false)
+  const metal = buildGifts(quality.metalGifts, 31, METAL_GIFT, true)
   const ribbons = createDual(paper.ribbons.count + metal.ribbons.count)
   const ribbonSources = [paper.ribbons, metal.ribbons]
   let ribbonOffset = 0
@@ -370,22 +372,22 @@ function createTreeData(): TreeData {
     ribbons.lift.set(source.lift, ribbonOffset)
     ribbonOffset += source.count
   }
-  const polaroids = buildPolaroids(32)
+  const polaroids = buildPolaroids(quality.polaroids)
   const starRng = mulberry32(404)
   return {
-    foliage: buildFoliage(14500),
-    settledSnow: buildSettledSnow(1300),
-    fallingSnow: buildFallingSnow(820),
+    foliage: buildFoliage(quality.foliage),
+    settledSnow: buildSettledSnow(quality.settledSnow),
+    fallingSnow: buildFallingSnow(quality.fallingSnow),
     chrome,
     jewel,
     snowCaps: buildCaps([chrome, jewel]),
     paperGifts: paper.gifts,
     metalGifts: metal.gifts,
     ribbons,
-    lights: buildLights(200),
+    lights: buildLights(quality.lights),
     polaroids: polaroids.data,
     photoUv: polaroids.uv,
-    clumps: buildClumps(52),
+    clumps: buildClumps(quality.clumps),
     starChaos: sampleChaos(starRng, 0.8, 1, 1.4),
     starTarget: new THREE.Vector3(0, TREE_Y0 + TREE_HEIGHT + 0.42, 0),
     starChaosQuat: randomQuaternion(mulberry32(405)),

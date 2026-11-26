@@ -6,6 +6,36 @@ const MODEL_URL =
 
 const HOLD_MS = 480
 
+function isPermissionError(error: unknown) {
+  return error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'SecurityError' || error.name === 'NotFoundError')
+}
+
+async function openUserCamera() {
+  const attempts: MediaStreamConstraints[] = [
+    { audio: false, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } },
+    { audio: false, video: { facingMode: 'user' } },
+    { audio: false, video: true },
+  ]
+  let lastError: unknown
+  for (const constraints of attempts) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraints)
+    } catch (error) {
+      if (isPermissionError(error)) throw error
+      lastError = error
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Camera unavailable')
+}
+
+function prepareInlineVideo(video: HTMLVideoElement) {
+  video.muted = true
+  video.defaultMuted = true
+  video.playsInline = true
+  video.setAttribute('playsinline', 'true')
+  video.setAttribute('webkit-playsinline', 'true')
+}
+
 function modeFromGesture(name: string, score: number): TreeMode | null {
   if (score < 0.58) return null
   if (name === 'Open_Palm') return 'chaos'
@@ -51,16 +81,18 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
     }
 
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-      })
+      stream = await openUserCamera()
       if (session.current !== id) {
         stream.getTracks().forEach((track) => track.stop())
         return
       }
+      prepareInlineVideo(video)
       video.srcObject = stream
-      await video.play()
+      try {
+        await video.play()
+      } catch {
+        /* iOS can reject play() until frames arrive; recognition still waits on readyState */
+      }
 
       const { FilesetResolver, GestureRecognizer } = await import('@mediapipe/tasks-vision')
       const wasm = await FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe/wasm`)
@@ -101,7 +133,7 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
       const tick = (now: number) => {
         if (stopped) return
         raf = requestAnimationFrame(tick)
-        if (now - lastDetect < 50 || video.readyState < 2) return
+        if (document.hidden || now - lastDetect < 50 || video.readyState < 2) return
         lastDetect = now
         let result
         try {
@@ -149,16 +181,30 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
 
       raf = requestAnimationFrame(tick)
       treeState.setCamera({ on: true, busy: false, error: false })
-      stopRef.current = () => {
+      let cleaned = false
+      const cleanup = () => {
+        if (cleaned) return
+        cleaned = true
         stopped = true
         cancelAnimationFrame(raf)
-        recognizer.close()
+        try {
+          recognizer.close()
+        } catch {
+          /* already closed */
+        }
         stream?.getTracks().forEach((track) => track.stop())
         video.srcObject = null
         treeState.hand.active = false
         treeState.hand.dx = 0
         treeState.hand.dy = 0
       }
+      stream.getVideoTracks().forEach((track) => {
+        track.addEventListener('ended', () => {
+          cleanup()
+          if (session.current === id) treeState.setCamera({ on: false, busy: false })
+        })
+      })
+      stopRef.current = cleanup
     } catch {
       fail()
     }

@@ -4,6 +4,7 @@ import { Bloom, EffectComposer, HueSaturation, ToneMapping, Vignette } from '@re
 import { Component, Suspense, type ReactNode } from 'react'
 import { ToneMappingMode } from 'postprocessing'
 import { BLOOM_INTENSITY, BLOOM_THRESHOLD } from './constants'
+import { getQuality } from './quality'
 import { CameraRig } from './CameraRig'
 import { Foliage } from './Foliage'
 import { stepMotion } from './motion'
@@ -33,6 +34,7 @@ function MotionDriver() {
 }
 
 export function Experience() {
+  const quality = getQuality()
   return (
     <>
       <color attach="background" args={['#040a08']} />
@@ -48,12 +50,13 @@ export function Experience() {
       <Snow />
       <Ornaments />
       <Polaroids />
-      <EffectComposer multisampling={4} enableNormalPass={false}>
+      <EffectComposer multisampling={quality.multisampling} enableNormalPass={false}>
         <Bloom
           luminanceThreshold={BLOOM_THRESHOLD}
           intensity={BLOOM_INTENSITY}
           luminanceSmoothing={0.18}
           mipmapBlur
+          levels={quality.bloomLevels}
           radius={0.48}
         />
         <HueSaturation hue={0} saturation={-0.14} />

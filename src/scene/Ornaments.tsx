@@ -3,12 +3,16 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { getTreeData } from './buildTree'
 import { WEIGHT } from './constants'
+import { getQuality } from './quality'
 import { Instances } from './Instances'
 import { lightFragment, lightVertex } from './shaders'
 
 export function Ornaments() {
   const data = useMemo(() => getTreeData(), [])
-  const sphere = useMemo(() => new THREE.SphereGeometry(1, 22, 16), [])
+  const sphere = useMemo(() => {
+    const quality = getQuality()
+    return new THREE.SphereGeometry(1, quality.sphereWidthSegments, quality.sphereHeightSegments)
+  }, [])
   const box = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
   const clump = useMemo(() => new THREE.IcosahedronGeometry(1, 0), [])
   const lightSphere = useMemo(() => {

@@ -26,13 +26,19 @@ Preview: http://localhost:4173/grand-luxury-christmas-tree/
 
 ## Controls
 
-Drag with a mouse or finger to orbit. Scroll or pinch to move closer.
+On a laptop, drag to orbit and scroll to move closer. On a phone or tablet, drag with one finger to orbit and pinch with two fingers to move closer. The page itself does not scroll or pinch-zoom.
 
 - **Form** assembles the tree.
 - **Unleash** scatters every needle, ornament, and polaroid.
 - **Camera** starts the webcam. **Camera Off** stops it and releases the tracks.
 
-The camera stays off until you turn it on. If the camera is denied or unavailable, drag and the Form / Unleash button still run the whole experience.
+The buttons sit along the bottom, above the home indicator, and stay clear of the notch. They are sized for a thumb. Nothing in the scene depends on hover.
+
+The camera stays off until you turn it on. If the camera is denied or unavailable, drag and the Form / Unleash button still run the whole experience. That includes iOS Safari and Android Chrome over HTTPS.
+
+## Phones and tablets
+
+The canvas fills the screen in portrait and landscape. A narrow screen pulls the camera back just enough to keep the tree in frame. Phones use fewer needles, ornaments, and bloom samples so a mid-range phone stays smooth without dropping the emerald and silver look.
 
 ### Gestures
 
