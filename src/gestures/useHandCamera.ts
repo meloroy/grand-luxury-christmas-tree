@@ -1,3 +1,4 @@
+import type { GestureRecognizer } from '@mediapipe/tasks-vision'
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { treeState, type TreeMode } from '../scene/treeState'
 
@@ -71,10 +72,29 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
     const id = ++session.current
     treeState.setCamera({ busy: true, error: false })
     let stream: MediaStream | null = null
+    let recognizer: GestureRecognizer | null = null
+    let raf = 0
+    let cleaned = false
+
+    const release = () => {
+      if (cleaned) return
+      cleaned = true
+      cancelAnimationFrame(raf)
+      try {
+        recognizer?.close()
+      } catch {
+        /* already closed */
+      }
+      stream?.getTracks().forEach((track) => track.stop())
+      stream = null
+      if (video.srcObject) video.srcObject = null
+      treeState.hand.active = false
+      treeState.hand.dx = 0
+      treeState.hand.dy = 0
+    }
 
     const fail = () => {
-      stream?.getTracks().forEach((track) => track.stop())
-      if (video.srcObject) video.srcObject = null
+      release()
       if (session.current !== id) return
       treeState.setCamera({ on: false, busy: false, error: true })
       window.setTimeout(() => treeState.setCamera({ error: false }), 1400)
@@ -84,18 +104,30 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
       stream = await openUserCamera()
       if (session.current !== id) {
         stream.getTracks().forEach((track) => track.stop())
+        stream = null
         return
       }
+      stopRef.current = release
       prepareInlineVideo(video)
       video.srcObject = stream
+      stream.getVideoTracks().forEach((track) => {
+        track.addEventListener('ended', () => {
+          release()
+          if (session.current === id) treeState.setCamera({ on: false, busy: false })
+        })
+      })
+      treeState.setCamera({ on: true, busy: true, error: false })
       try {
         await video.play()
       } catch {
         /* iOS can reject play() until frames arrive; recognition still waits on readyState */
       }
+      if (session.current !== id) return
 
       const { FilesetResolver, GestureRecognizer } = await import('@mediapipe/tasks-vision')
+      if (session.current !== id) return
       const wasm = await FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe/wasm`)
+      if (session.current !== id) return
       const options = {
         baseOptions: { modelAssetPath: MODEL_URL },
         runningMode: 'VIDEO' as const,
@@ -104,34 +136,35 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
         minHandPresenceConfidence: 0.6,
         minTrackingConfidence: 0.6,
       }
-      let recognizer
       try {
         recognizer = await GestureRecognizer.createFromOptions(wasm, {
           ...options,
           baseOptions: { ...options.baseOptions, delegate: 'GPU' },
         })
       } catch {
+        if (session.current !== id) return
         recognizer = await GestureRecognizer.createFromOptions(wasm, {
           ...options,
           baseOptions: { ...options.baseOptions, delegate: 'CPU' },
         })
       }
       if (session.current !== id) {
-        recognizer.close()
-        stream.getTracks().forEach((track) => track.stop())
-        video.srcObject = null
+        try {
+          recognizer?.close()
+        } catch {
+          /* already closed */
+        }
+        recognizer = null
         return
       }
 
-      let raf = 0
-      let stopped = false
       let lastDetect = 0
       let smoothedX = 0.5
       let smoothedY = 0.5
       const hold = { mode: null as TreeMode | null, since: 0 }
 
       const tick = (now: number) => {
-        if (stopped) return
+        if (cleaned || !recognizer) return
         raf = requestAnimationFrame(tick)
         if (document.hidden || now - lastDetect < 50 || video.readyState < 2) return
         lastDetect = now
@@ -180,31 +213,7 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
       }
 
       raf = requestAnimationFrame(tick)
-      treeState.setCamera({ on: true, busy: false, error: false })
-      let cleaned = false
-      const cleanup = () => {
-        if (cleaned) return
-        cleaned = true
-        stopped = true
-        cancelAnimationFrame(raf)
-        try {
-          recognizer.close()
-        } catch {
-          /* already closed */
-        }
-        stream?.getTracks().forEach((track) => track.stop())
-        video.srcObject = null
-        treeState.hand.active = false
-        treeState.hand.dx = 0
-        treeState.hand.dy = 0
-      }
-      stream.getVideoTracks().forEach((track) => {
-        track.addEventListener('ended', () => {
-          cleanup()
-          if (session.current === id) treeState.setCamera({ on: false, busy: false })
-        })
-      })
-      stopRef.current = cleanup
+      if (session.current === id) treeState.setCamera({ on: true, busy: false, error: false })
     } catch {
       fail()
     }

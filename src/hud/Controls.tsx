@@ -33,13 +33,12 @@ export function Controls() {
           <button
             type="button"
             className={`hud-button min-h-14 flex-1 basis-0 whitespace-nowrap px-3 text-[0.8rem] tracking-[0.14em] active:border-[#eef3f8]/85 active:bg-[#12211c]/80 landscape:min-h-12 sm:min-h-11 sm:flex-none sm:min-w-36 sm:px-6 sm:text-[0.72rem] sm:tracking-[0.28em] ${hud.cameraBusy ? 'camera-busy' : ''} ${hud.cameraError ? 'camera-error' : ''}`}
-            disabled={hud.cameraBusy}
             onClick={() => {
-              if (hud.cameraOn) stop()
+              if (hud.cameraOn || hud.cameraBusy) stop()
               else void start()
             }}
           >
-            {hud.cameraOn ? 'Camera Off' : 'Camera'}
+            {hud.cameraOn || hud.cameraBusy ? 'Camera Off' : 'Camera'}
           </button>
         </div>
       </div>
