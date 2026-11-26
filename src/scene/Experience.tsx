@@ -1,68 +1,42 @@
-import { Environment } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
-import { Bloom, EffectComposer, HueSaturation, ToneMapping, Vignette } from '@react-three/postprocessing'
-import { Component, Suspense, type ReactNode } from 'react'
+import { Bloom, EffectComposer, ToneMapping, Vignette } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
-import { BLOOM_INTENSITY, BLOOM_THRESHOLD } from './constants'
-import { getQuality } from './quality'
+import { useSession } from '../session/store'
 import { CameraRig } from './CameraRig'
-import { Foliage } from './Foliage'
-import { stepMotion } from './motion'
-import { Ornaments } from './Ornaments'
-import { Palace } from './Palace'
-import { Polaroids } from './Polaroids'
-import { Snow } from './Snow'
-
-class QuietBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false }
-
-  static getDerivedStateFromError() {
-    return { failed: true }
-  }
-
-  render() {
-    if (this.state.failed) return null
-    return this.props.children
-  }
-}
-
-function MotionDriver() {
-  useFrame((_, delta) => {
-    stepMotion(delta)
-  }, -100)
-  return null
-}
+import { Lamp } from './Lamp'
+import { getQuality } from './quality'
+import { Showcase } from './Showcase'
+import { SnowFall } from './Snow'
+import { Starfield } from './Starfield'
 
 export function Experience() {
+  const phase = useSession().phase
   const quality = getQuality()
+  const assembled = phase === 'reveal' || phase === 'play'
+
   return (
     <>
-      <color attach="background" args={['#040a08']} />
-      <MotionDriver />
+      <color attach="background" args={['#000000']} />
+      <Starfield />
+      <SnowFall count={assembled ? quality.falling : Math.min(360, quality.falling)} />
       <CameraRig />
-      <QuietBoundary>
-        <Suspense fallback={null}>
-          <Environment preset="lobby" background={false} environmentIntensity={0.32} />
-        </Suspense>
-      </QuietBoundary>
-      <Palace />
-      <Foliage />
-      <Snow />
-      <Ornaments />
-      <Polaroids />
-      <EffectComposer multisampling={quality.multisampling} enableNormalPass={false}>
-        <Bloom
-          luminanceThreshold={BLOOM_THRESHOLD}
-          intensity={BLOOM_INTENSITY}
-          luminanceSmoothing={0.18}
-          mipmapBlur
-          levels={quality.bloomLevels}
-          radius={0.48}
-        />
-        <HueSaturation hue={0} saturation={-0.14} />
-        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-        <Vignette offset={0.18} darkness={0.62} />
-      </EffectComposer>
+      {assembled ? (
+        <>
+          <Showcase />
+          <Lamp />
+          <EffectComposer multisampling={quality.multisampling} enableNormalPass={false}>
+            <Bloom
+              luminanceThreshold={quality.bloomThreshold}
+              intensity={quality.bloomIntensity}
+              luminanceSmoothing={0.22}
+              mipmapBlur
+              levels={quality.bloomLevels}
+              radius={0.45}
+            />
+            <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+            <Vignette offset={0.2} darkness={0.55} />
+          </EffectComposer>
+        </>
+      ) : null}
     </>
   )
 }

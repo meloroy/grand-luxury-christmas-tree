@@ -1,14 +1,18 @@
-import type { GestureRecognizer } from '@mediapipe/tasks-vision'
+import type { HandLandmarker } from '@mediapipe/tasks-vision'
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import { treeState, type TreeMode } from '../scene/treeState'
+import { runtime, setCamera, setMode, type Mode } from '../session/store'
 
 const MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task'
+  'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
 
-const HOLD_MS = 480
+const HOLD_MS = 420
+const TIPS = [4, 8, 12, 16, 20]
 
 function isPermissionError(error: unknown) {
-  return error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'SecurityError' || error.name === 'NotFoundError')
+  return (
+    error instanceof DOMException &&
+    (error.name === 'NotAllowedError' || error.name === 'SecurityError' || error.name === 'NotFoundError')
+  )
 }
 
 async function openUserCamera() {
@@ -37,10 +41,22 @@ function prepareInlineVideo(video: HTMLVideoElement) {
   video.setAttribute('webkit-playsinline', 'true')
 }
 
-function modeFromGesture(name: string, score: number): TreeMode | null {
-  if (score < 0.58) return null
-  if (name === 'Open_Palm') return 'chaos'
-  if (name === 'Closed_Fist') return 'formed'
+function gestureFromLandmarks(landmarks: { x: number; y: number }[]): Mode | null {
+  const wrist = landmarks[0]
+  const thumb = landmarks[4]
+  const index = landmarks[8]
+  if (!wrist || !thumb || !index) return null
+  const pinch = Math.hypot(thumb.x - index.x, thumb.y - index.y)
+  if (pinch < 0.05) return 'FOCUS'
+  let sum = 0
+  for (const tip of TIPS) {
+    const point = landmarks[tip]
+    if (!point) return null
+    sum += Math.hypot(point.x - wrist.x, point.y - wrist.y)
+  }
+  const average = sum / TIPS.length
+  if (average < 0.25) return 'TREE'
+  if (average > 0.4) return 'SCATTER'
   return null
 }
 
@@ -52,27 +68,27 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
     session.current += 1
     stopRef.current?.()
     stopRef.current = null
-    treeState.hand.active = false
-    treeState.hand.dx = 0
-    treeState.hand.dy = 0
-    treeState.setCamera({ on: false, busy: false })
+    runtime.handActive = false
+    runtime.handX = 0
+    runtime.handY = 0
+    setCamera({ on: false, busy: false })
   }, [])
 
   const start = useCallback(async () => {
-    if (treeState.cameraOn || treeState.cameraBusy) return
+    if (runtime.cameraOn || runtime.cameraBusy) return
     const video = videoRef.current
     if (!video || !navigator.mediaDevices?.getUserMedia) {
-      treeState.setCamera({ on: false, busy: false, error: true })
-      window.setTimeout(() => treeState.setCamera({ error: false }), 1200)
+      setCamera({ on: false, busy: false, error: true })
+      window.setTimeout(() => setCamera({ error: false }), 1200)
       return
     }
 
     stopRef.current?.()
     stopRef.current = null
     const id = ++session.current
-    treeState.setCamera({ busy: true, error: false })
+    setCamera({ busy: true, error: false })
     let stream: MediaStream | null = null
-    let recognizer: GestureRecognizer | null = null
+    let landmarker: HandLandmarker | null = null
     let raf = 0
     let cleaned = false
 
@@ -81,23 +97,23 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
       cleaned = true
       cancelAnimationFrame(raf)
       try {
-        recognizer?.close()
+        landmarker?.close()
       } catch {
         /* already closed */
       }
       stream?.getTracks().forEach((track) => track.stop())
       stream = null
       if (video.srcObject) video.srcObject = null
-      treeState.hand.active = false
-      treeState.hand.dx = 0
-      treeState.hand.dy = 0
+      runtime.handActive = false
+      runtime.handX = 0
+      runtime.handY = 0
     }
 
     const fail = () => {
       release()
       if (session.current !== id) return
-      treeState.setCamera({ on: false, busy: false, error: true })
-      window.setTimeout(() => treeState.setCamera({ error: false }), 1400)
+      setCamera({ on: false, busy: false, error: true })
+      window.setTimeout(() => setCamera({ error: false }), 1400)
     }
 
     try {
@@ -113,18 +129,18 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
       stream.getVideoTracks().forEach((track) => {
         track.addEventListener('ended', () => {
           release()
-          if (session.current === id) treeState.setCamera({ on: false, busy: false })
+          if (session.current === id) setCamera({ on: false, busy: false })
         })
       })
-      treeState.setCamera({ on: true, busy: true, error: false })
+      setCamera({ on: true, busy: true, error: false })
       try {
         await video.play()
       } catch {
-        /* iOS can reject play() until frames arrive; recognition still waits on readyState */
+        /* iOS can reject play() until frames arrive */
       }
       if (session.current !== id) return
 
-      const { FilesetResolver, GestureRecognizer } = await import('@mediapipe/tasks-vision')
+      const { FilesetResolver, HandLandmarker } = await import('@mediapipe/tasks-vision')
       if (session.current !== id) return
       const wasm = await FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe/wasm`)
       if (session.current !== id) return
@@ -137,62 +153,64 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
         minTrackingConfidence: 0.6,
       }
       try {
-        recognizer = await GestureRecognizer.createFromOptions(wasm, {
+        landmarker = await HandLandmarker.createFromOptions(wasm, {
           ...options,
           baseOptions: { ...options.baseOptions, delegate: 'GPU' },
         })
       } catch {
         if (session.current !== id) return
-        recognizer = await GestureRecognizer.createFromOptions(wasm, {
+        landmarker = await HandLandmarker.createFromOptions(wasm, {
           ...options,
           baseOptions: { ...options.baseOptions, delegate: 'CPU' },
         })
       }
       if (session.current !== id) {
         try {
-          recognizer?.close()
+          landmarker?.close()
         } catch {
           /* already closed */
         }
-        recognizer = null
+        landmarker = null
         return
       }
 
       let lastDetect = 0
-      let smoothedX = 0.5
-      let smoothedY = 0.5
-      const hold = { mode: null as TreeMode | null, since: 0 }
+      let lastStamp = -1
+      let smoothX = 0.5
+      let smoothY = 0.5
+      const hold = { mode: null as Mode | null, since: 0 }
 
       const tick = (now: number) => {
-        if (cleaned || !recognizer) return
+        if (cleaned || !landmarker) return
         raf = requestAnimationFrame(tick)
         if (document.hidden || now - lastDetect < 50 || video.readyState < 2) return
         lastDetect = now
+        const stamp = Math.max(lastStamp + 1, now)
+        lastStamp = stamp
         let result
         try {
-          result = recognizer.recognizeForVideo(video, now)
+          result = landmarker.detectForVideo(video, stamp)
         } catch {
           return
         }
         const landmarks = result.landmarks[0]
         if (!landmarks) {
-          smoothedX += (0.5 - smoothedX) * 0.22
-          smoothedY += (0.5 - smoothedY) * 0.22
-          treeState.hand.active = false
-          treeState.hand.dx = 0
-          treeState.hand.dy = 0
+          smoothX += (0.5 - smoothX) * 0.22
+          smoothY += (0.5 - smoothY) * 0.22
+          runtime.handActive = false
+          runtime.handX = 0
+          runtime.handY = 0
           hold.mode = null
           return
         }
         const palm = landmarks[9] ?? landmarks[0]
-        smoothedX += (1 - palm.x - smoothedX) * 0.35
-        smoothedY += (palm.y - smoothedY) * 0.35
-        treeState.hand.active = true
-        treeState.hand.dx = smoothedX - 0.5
-        treeState.hand.dy = smoothedY - 0.5
+        smoothX += (1 - palm.x - smoothX) * 0.35
+        smoothY += (palm.y - smoothY) * 0.35
+        runtime.handActive = true
+        runtime.handX = smoothX - 0.5
+        runtime.handY = smoothY - 0.5
 
-        const gesture = result.gestures[0]?.[0]
-        const desired = modeFromGesture(gesture?.categoryName ?? '', gesture?.score ?? 0)
+        const desired = gestureFromLandmarks(landmarks)
         if (!desired) {
           hold.mode = null
           return
@@ -203,17 +221,17 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
           return
         }
         if (now - hold.since < HOLD_MS) return
-        if (treeState.gestureLock) {
-          if (desired === treeState.gestureLock) return
-          treeState.gestureLock = null
+        if (runtime.gestureLock) {
+          if (desired === runtime.gestureLock) return
+          runtime.gestureLock = null
           hold.since = now
           return
         }
-        treeState.setMode(desired, 'gesture')
+        setMode(desired, 'gesture')
       }
 
       raf = requestAnimationFrame(tick)
-      if (session.current === id) treeState.setCamera({ on: true, busy: false, error: false })
+      if (session.current === id) setCamera({ on: true, busy: false, error: false })
     } catch {
       fail()
     }

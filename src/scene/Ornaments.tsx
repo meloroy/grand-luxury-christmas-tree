@@ -1,170 +1,91 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo } from 'react'
-import * as THREE from 'three'
-import { getTreeData } from './buildTree'
-import { WEIGHT } from './constants'
+import { useRef } from 'react'
+import type * as THREE from 'three'
 import { getQuality } from './quality'
-import { Instances } from './Instances'
-import { lightFragment, lightVertex } from './shaders'
+import { getOrnamentPose, getPower } from './sim'
 
-export function Ornaments() {
-  const data = useMemo(() => getTreeData(), [])
-  const sphere = useMemo(() => {
-    const quality = getQuality()
-    return new THREE.SphereGeometry(1, quality.sphereWidthSegments, quality.sphereHeightSegments)
-  }, [])
-  const box = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
-  const clump = useMemo(() => new THREE.IcosahedronGeometry(1, 0), [])
-  const lightSphere = useMemo(() => {
-    const geometry = new THREE.SphereGeometry(1, 10, 8)
-    geometry.setAttribute('aColor', new THREE.InstancedBufferAttribute(data.lights.color, 3))
-    geometry.setAttribute('aSeed', new THREE.InstancedBufferAttribute(data.lights.seed, 1))
-    return geometry
-  }, [data.lights.color, data.lights.seed])
+const COLORS = ['#f0d48a', '#d0121c', '#81D8D0', '#e8eef5', '#9dffc4', '#c9a36a']
 
-  const chromeMaterial = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: '#ffffff',
-        metalness: 1,
-        roughness: 0.16,
-        clearcoat: 0.55,
-        clearcoatRoughness: 0.22,
-        envMapIntensity: 1.15,
-      }),
-    [],
-  )
-  const jewelMaterial = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: '#ffffff',
-        metalness: 0.22,
-        roughness: 0.14,
-        clearcoat: 1,
-        clearcoatRoughness: 0.08,
-        envMapIntensity: 0.7,
-      }),
-    [],
-  )
-  const paperMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: '#ffffff',
-        roughness: 0.74,
-        metalness: 0.04,
-      }),
-    [],
-  )
-  const metalGiftMaterial = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: '#ffffff',
-        metalness: 0.92,
-        roughness: 0.24,
-        envMapIntensity: 1.05,
-      }),
-    [],
-  )
-  const ribbonMaterial = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: '#d5dee6',
-        metalness: 1,
-        roughness: 0.28,
-        envMapIntensity: 1.1,
-      }),
-    [],
-  )
-  const capMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: '#e7eef3',
-        roughness: 0.92,
-        metalness: 0.02,
-      }),
-    [],
-  )
-  const clumpMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: '#e4ebf1',
-        roughness: 1,
-        metalness: 0,
-      }),
-    [],
-  )
-  const lightMaterial = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        uniforms: { uTime: { value: 0 } },
-        vertexShader: lightVertex,
-        fragmentShader: lightFragment,
-        toneMapped: false,
-      }),
-    [],
-  )
+function Ornament({ index }: { index: number }) {
+  const ref = useRef<THREE.Group>(null)
+  const material = useRef<THREE.MeshStandardMaterial>(null)
+  const kind = index % 3
+  const color = COLORS[index % COLORS.length]
 
-  useFrame(({ clock }) => {
-    lightMaterial.uniforms.uTime.value = clock.elapsedTime
+  useFrame(() => {
+    const group = ref.current
+    const pose = getOrnamentPose(index)
+    if (!group || !pose) return
+    group.position.set(pose.x, pose.y, pose.z)
+    group.rotation.set(pose.rx, pose.ry, pose.rz)
+    group.scale.setScalar(Math.max(0.001, pose.s))
+    if (material.current) material.current.emissiveIntensity = 0.12 + getPower() * 0.7
   })
 
   return (
-    <>
-      <Instances
-        geometry={sphere}
-        material={chromeMaterial}
-        data={data.chrome}
-        motion="bauble"
-        weight={WEIGHT.bauble}
-        colorize
-      />
-      <Instances
-        geometry={sphere}
-        material={jewelMaterial}
-        data={data.jewel}
-        motion="bauble"
-        weight={WEIGHT.bauble}
-        colorize
-      />
-      <Instances
-        geometry={sphere}
-        material={capMaterial}
-        data={data.snowCaps}
-        motion="bauble"
-        weight={WEIGHT.bauble}
-      />
-      <Instances
-        geometry={box}
-        material={paperMaterial}
-        data={data.paperGifts}
-        motion="gift"
-        weight={WEIGHT.gift}
-        colorize
-      />
-      <Instances
-        geometry={box}
-        material={metalGiftMaterial}
-        data={data.metalGifts}
-        motion="gift"
-        weight={WEIGHT.gift}
-        colorize
-      />
-      <Instances geometry={box} material={ribbonMaterial} data={data.ribbons} motion="gift" weight={WEIGHT.gift} />
-      <Instances
-        geometry={clump}
-        material={clumpMaterial}
-        data={data.clumps}
-        motion="snow"
-        weight={WEIGHT.snow}
-      />
-      <LightField geometry={lightSphere} material={lightMaterial} />
-    </>
+    <group ref={ref}>
+      {kind === 0 ? (
+        <mesh>
+          <sphereGeometry args={[0.28, 24, 16]} />
+          <meshStandardMaterial
+            ref={material}
+            color={color}
+            metalness={0.88}
+            roughness={0.14}
+            emissive={color}
+            emissiveIntensity={0.3}
+          />
+        </mesh>
+      ) : null}
+      {kind === 1 ? (
+        <group>
+          <mesh scale={[1, 0.88, 1]}>
+            <sphereGeometry args={[0.26, 24, 16]} />
+            <meshStandardMaterial
+              ref={material}
+              color="#e7fff8"
+              metalness={0.25}
+              roughness={0.08}
+              emissive="#81D8D0"
+              emissiveIntensity={0.35}
+            />
+          </mesh>
+          <mesh position={[0, 0.3, 0]}>
+            <cylinderGeometry args={[0.02, 0.03, 0.14, 8]} />
+            <meshStandardMaterial color="#d7b56a" metalness={0.7} roughness={0.3} />
+          </mesh>
+        </group>
+      ) : null}
+      {kind === 2 ? (
+        <group>
+          <mesh position={[0, -0.06, 0]}>
+            <coneGeometry args={[0.28, 0.42, 8]} />
+            <meshStandardMaterial
+              ref={material}
+              color="#bff8ee"
+              metalness={0.4}
+              roughness={0.12}
+              emissive="#1E5959"
+              emissiveIntensity={0.45}
+            />
+          </mesh>
+          <mesh position={[0, 0.24, 0]}>
+            <coneGeometry args={[0.18, 0.32, 8]} />
+            <meshStandardMaterial color="#f3fffb" emissive="#81D8D0" emissiveIntensity={0.4} metalness={0.45} roughness={0.1} />
+          </mesh>
+        </group>
+      ) : null}
+    </group>
   )
 }
 
-function LightField({ geometry, material }: { geometry: THREE.BufferGeometry; material: THREE.ShaderMaterial }) {
-  const data = useMemo(() => getTreeData().lights, [])
+export function Ornaments() {
+  const count = getQuality().ornaments
   return (
-    <Instances geometry={geometry} material={material} data={data} motion="light" weight={WEIGHT.light} />
+    <group>
+      {Array.from({ length: count }, (_, index) => (
+        <Ornament key={index} index={index} />
+      ))}
+    </group>
   )
 }
