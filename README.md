@@ -2,7 +2,13 @@
 
 https://meloroy.github.io/grand-luxury-christmas-tree/
 
-A cinematic emerald-and-silver Christmas tree. It rests fully formed, then unleashes into a cloud of needles, ornaments, and polaroids, then gathers again.
+A particle Christmas mini-game. Sixteen photos become a tall emerald-and-gold tree that can morph, scatter, and open one memory in front of the camera.
+
+## Flow
+
+The page opens on a black starfield. Add, replace, or remove photos until the count reads 16/16, then assemble the tree. There are no placeholder polaroids.
+
+The finished set is stored in IndexedDB on this device (no login). A later visit can reopen that record or start a new one. Starting over does not delete the saved tree until a new set of 16 is assembled. The showcase also writes the record as soon as it is generated.
 
 ## Develop
 
@@ -24,45 +30,37 @@ npm run preview
 
 Preview: http://localhost:4173/grand-luxury-christmas-tree/
 
-## Controls
+## Play
 
-On a laptop, drag to orbit and scroll to move closer. On a phone or tablet, drag with one finger to orbit and pinch with two fingers to move closer. The page itself does not scroll or pinch-zoom.
+- Pull the crystal lamp, or let the reveal ignite the tree. Pull it again to dim the lights.
+- Move the pointer to push particles apart. They spring back into the current shape when the pointer leaves.
+- Right-drag, or two fingers, orbits. The scroll wheel or a pinch moves closer. One finger on a phone pushes particles and does not orbit.
+- Shape buttons morph the same particles: Tree, Gift, Hat, Stocking, Text, Elk, Santa, Gallery.
+- Release Chaos scatters them. Each particle spins on its own axis. Ignite Festivity gathers them again.
+- Focus brings one gold-framed photo to the front. A pinch does the same when the camera is on.
+- Change Music toggles two original looping tracks, `1.mp3` and `2.mp3`. If the browser blocks sound, the first tap or the lamp starts it.
 
-- **Form** assembles the tree.
-- **Unleash** scatters every needle, ornament, and polaroid.
-- **Camera** starts the webcam. **Camera Off** stops it and releases the tracks.
+## Camera
 
-The buttons sit along the bottom, above the home indicator, and stay clear of the notch. They are sized for a thumb. Nothing in the scene depends on hover.
+The camera stays off until Camera is pressed. Camera Off stops it.
 
-The camera stays off until you turn it on. If the camera is denied or unavailable, drag and the Form / Unleash button still run the whole experience. That includes iOS Safari and Android Chrome over HTTPS.
+With the camera on, a held gesture switches the scene:
 
-## Phones and tablets
+- Pinch: Focus
+- Fist: Tree
+- Open hand: Scatter
+- Moving the palm orbits the scene, with damping
 
-The canvas fills the screen in portrait and landscape. A narrow screen pulls the camera back just enough to keep the tree in frame. Phones use fewer needles, ornaments, and bloom samples so a mid-range phone stays smooth without dropping the emerald and silver look.
+A gesture has to hold briefly before it changes the scene. If the camera is denied or missing, the pointer and the buttons still run everything.
 
-### Gestures
+Webcam access needs a secure context: HTTPS or localhost. GitHub Pages serves this site over HTTPS. The first time the camera is enabled, the browser downloads the MediaPipe hand model.
 
-With the camera on:
+## Phones
 
-- Open palm: Unleash (chaos).
-- Closed fist: Form.
-- Move your hand to orbit. The view is damped so small jitters do not shake the camera.
-
-A gesture has to hold briefly before the tree changes, so a flicker does not toggle the state.
-
-Webcam access needs a secure context: **HTTPS or localhost**. GitHub Pages serves this site over HTTPS.
-
-The first time you enable the camera, the browser downloads the MediaPipe gesture model.
+The canvas fills the screen in portrait and landscape, including the safe areas. Buttons are sized for a thumb. Nothing in the scene depends on hover. Mid-range phones use fewer particles, a lower pixel ratio, and lighter bloom, with the same emerald, gold, and black starfield.
 
 ## Deploy
 
-Pushes to `main` run `.github/workflows/deploy.yml`. The workflow installs dependencies, runs `npm run build`, and deploys `dist` to GitHub Pages with the official Pages actions.
+Pushes to `main` run `.github/workflows/deploy.yml`. The workflow installs dependencies, runs `npm run build`, and deploys `dist` to GitHub Pages.
 
-Pages source must be **GitHub Actions**:
-
-1. Open the repository **Settings → Pages**.
-2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-
-Public URL: https://meloroy.github.io/grand-luxury-christmas-tree/
-
-The site goes live after the deploy workflow finishes on `main`.
+Pages source must be GitHub Actions. Public URL: https://meloroy.github.io/grand-luxury-christmas-tree/
