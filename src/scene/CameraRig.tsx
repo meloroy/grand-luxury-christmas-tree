@@ -93,18 +93,25 @@ export function CameraRig() {
       persp.fov = 34
       persp.updateProjectionMatrix()
     }
+    const aspect = size.width / Math.max(1, size.height)
     const focus = runtime.phase === 'play' && runtime.mode === 'FOCUS'
     if (focus) {
+      const frameWidth = 1.12 * 4.5
+      const frameHeight = 1.38 * 4.5
+      const margin = 1.22
+      const tan = Math.tan((34 * Math.PI) / 360)
+      const distForHeight = (frameHeight * margin) / (2 * tan)
+      const distForWidth = (frameWidth * margin) / (2 * tan * Math.max(aspect, 0.3))
+      const distance = Math.max(distForHeight, distForWidth) * orbit.current.zoom
       camera.position.x = THREE.MathUtils.damp(camera.position.x, 0, 2.6, dt)
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, 2.45, 2.6, dt)
-      camera.position.z = THREE.MathUtils.damp(camera.position.z, 49, 2.6, dt)
+      camera.position.y = THREE.MathUtils.damp(camera.position.y, FOCUS_AT.y + 0.35, 2.6, dt)
+      camera.position.z = THREE.MathUtils.damp(camera.position.z, FOCUS_AT.z + distance, 2.6, dt)
       look.current.x = THREE.MathUtils.damp(look.current.x, FOCUS_AT.x, 2.6, dt)
       look.current.y = THREE.MathUtils.damp(look.current.y, FOCUS_AT.y, 2.6, dt)
       look.current.z = THREE.MathUtils.damp(look.current.z, FOCUS_AT.z, 2.6, dt)
       camera.lookAt(look.current)
       return
     }
-    const aspect = size.width / Math.max(1, size.height)
     const base = aspect < 0.85 ? 40 : 34
     const reveal = runtime.phase === 'reveal' ? getReveal() : 1
     const ease = 1 - (1 - reveal) ** 3

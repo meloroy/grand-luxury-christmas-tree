@@ -386,13 +386,13 @@ export async function confirmNewRecord() {
 export function setMode(mode: Mode, source: 'user' | 'gesture' = 'user') {
   if (runtime.phase !== 'play') return
   if (source === 'user') runtime.gestureLock = mode
+  if (runtime.mode === mode) return
   if (mode === 'FOCUS') {
     const photos = listPhotos().filter((item) => item.type === 'PHOTO')
     const pick = photos[Math.floor(Math.random() * photos.length)]
     runtime.focusIndex = pick?.index ?? 0
   }
   if (mode !== 'SCATTER' && mode !== 'FOCUS') runtime.formed = mode
-  if (runtime.mode === mode && mode !== 'FOCUS') return
   runtime.mode = mode
   publish()
 }

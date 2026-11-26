@@ -178,7 +178,7 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
       let lastStamp = -1
       let smoothX = 0.5
       let smoothY = 0.5
-      const hold = { mode: null as Mode | null, since: 0 }
+      const hold = { mode: null as Mode | null, since: 0, fired: false }
 
       const tick = (now: number) => {
         if (cleaned || !landmarker) return
@@ -201,6 +201,7 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
           runtime.handX = 0
           runtime.handY = 0
           hold.mode = null
+          hold.fired = false
           return
         }
         const palm = landmarks[9] ?? landmarks[0]
@@ -213,21 +214,25 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
         const desired = gestureFromLandmarks(landmarks)
         if (!desired) {
           hold.mode = null
+          hold.fired = false
           return
         }
         if (hold.mode !== desired) {
           hold.mode = desired
           hold.since = now
+          hold.fired = false
           return
         }
-        if (now - hold.since < HOLD_MS) return
+        if (now - hold.since < HOLD_MS || hold.fired) return
         if (runtime.gestureLock) {
           if (desired === runtime.gestureLock) return
           runtime.gestureLock = null
           hold.since = now
+          hold.fired = false
           return
         }
         setMode(desired, 'gesture')
+        hold.fired = true
       }
 
       raf = requestAnimationFrame(tick)
