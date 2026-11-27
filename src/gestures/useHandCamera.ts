@@ -220,6 +220,7 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
         runtime.handY = smoothY - 0.5
 
         const desired = gestureFromLandmarks(landmarks)
+        if (runtime.photoEditing) { hold.mode = null; hold.fired = false; return }
         if (!desired) {
           hold.mode = null
           hold.fired = false

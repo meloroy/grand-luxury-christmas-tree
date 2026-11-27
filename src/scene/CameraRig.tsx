@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { getPhotoTexture, runtime } from '../session/store'
 import { getReveal } from './sim'
+import { FOCUS_PHOTO_SCALE, photoAspect, polaroidLayout } from '../photos/polaroid'
 
 const LOOK = new THREE.Vector3(0, 4.8, 0)
 const FOCUS_AT = new THREE.Vector3(0, 2, 35)
@@ -104,13 +105,9 @@ export function CameraRig() {
     const aspect = size.width / Math.max(1, size.height)
     const focus = runtime.phase === 'play' && runtime.mode === 'FOCUS'
     if (focus) {
-      const image = getPhotoTexture(runtime.focusIndex)?.image as HTMLImageElement | undefined
-      const ratio = image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 1
-      const width = Math.min(0.96, 1.12 * ratio)
-      const height = width / ratio
-      const border = Math.min(width, height) * 0.025
-      const frameWidth = (width + border * 2) * 4.5
-      const frameHeight = (height + border * 2) * 4.5
+      const layout = polaroidLayout(photoAspect(getPhotoTexture(runtime.focusIndex)?.image))
+      const frameWidth = layout.frameWidth * FOCUS_PHOTO_SCALE
+      const frameHeight = (layout.frameHeight + layout.clipOverhang) * FOCUS_PHOTO_SCALE
       const margin = 1.22
       const tan = Math.tan((34 * Math.PI) / 360)
       const distForHeight = (frameHeight * margin) / (2 * tan)
@@ -127,7 +124,9 @@ export function CameraRig() {
     }
     const defaultBase = aspect < 0.85 ? 43 : 37
     const textDistance = 22 / (2 * Math.tan((34 * Math.PI) / 360) * Math.max(aspect, 0.2))
-    const base = runtime.mode === 'TEXT' ? Math.max(defaultBase, textDistance) : defaultBase
+    const treeDistance = Math.max(42, 12 / (2 * Math.tan((34 * Math.PI) / 360) * Math.max(aspect, 0.2)))
+    const base = runtime.mode === 'TEXT' ? Math.max(defaultBase, textDistance)
+      : runtime.mode === 'TREE' ? Math.max(defaultBase, treeDistance) : defaultBase
     const reveal = runtime.phase === 'reveal' ? getReveal() : 1
     const ease = 1 - (1 - reveal) ** 3
     const radius = base * orbit.current.zoom * (runtime.phase === 'reveal' ? THREE.MathUtils.lerp(1.28, 1, ease) : 1)

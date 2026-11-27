@@ -1,6 +1,7 @@
 import { useRef, type ChangeEvent } from 'react'
 import { uploadPhoto } from '../photos/uploadPhoto'
 import { MONTHS, PHOTO_COUNT } from '../photos/months'
+import { CAPTION_LIMIT } from '../photos/polaroid'
 import { pauseMusic, startMusic } from '../session/music'
 import { GameButton } from './GameButton'
 import {
@@ -10,6 +11,7 @@ import {
   removePhotoAt,
   reopenRecord,
   requestNewRecord,
+  setPhotoCaption,
   useSession,
 } from '../session/store'
 
@@ -117,6 +119,11 @@ export function StartGate() {
                   {source ? <img src={source} alt="" /> : <span>+</span>}
                   {snap.pending[index] ? <span className="slot-wait">…</span> : null}
                 </GameButton>
+                {source ? <label className="slot-caption">
+                  <span>照片说明（选填）</span>
+                  <input value={snap.captions[index]} maxLength={CAPTION_LIMIT} placeholder="留下一句回忆"
+                    aria-label={`${MONTHS[index]}照片说明`} onChange={(event) => setPhotoCaption(index, event.target.value)} />
+                </label> : null}
                 {source ? (
                   <GameButton type="button" className="slot-remove" aria-label={`移除${MONTHS[index]}的照片`} onClick={() => removePhotoAt(index)}>
                     移除照片
@@ -153,6 +160,7 @@ export function ConfirmNew() {
         <p className="eyebrow">新的回忆</p>
         <h2 id="confirm-title">开始记录新的一年？</h2>
         <p className="lede">旧回忆会继续保存在此设备上，直到你上传十二个月的照片并点亮新的圣诞树。</p>
+        {snap.phase === 'play' && snap.saveError ? <p className="lede" role="alert">最近的修改尚未保存，请重试后再新建。</p> : null}
         <div className="choice-row">
           <GameButton type="button" className="hud-button is-on" onClick={() => cancelNewRecord()}>
             保留当前回忆

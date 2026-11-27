@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import * as THREE from 'three'
 import { PHOTO_COUNT } from '../photos/months'
+import { CAPTION_LIMIT } from '../photos/polaroid'
 import { loadChristmasFont } from '../scene/textFont'
 import { requestReveal } from '../scene/reveal'
 import { SHAPES } from '../scene/modes'
@@ -56,6 +57,7 @@ export const runtime = {
   morphId: 0,
   powered: false,
   focusIndex: 0,
+  photoEditing: false,
   gestureLock: null as Mode | null,
   handActive: false,
   handX: 0,
@@ -74,7 +76,7 @@ export const runtime = {
 const photoTextures: (THREE.Texture | null)[] = Array.from({ length: SLOT_COUNT }, () => null)
 const photoSources: (string | null)[] = Array.from({ length: SLOT_COUNT }, () => null)
 const pending: boolean[] = Array.from({ length: SLOT_COUNT }, () => false)
-// Preserve captions from older records as metadata without displaying them.
+// User-written notes are kept with the original photo sources.
 const captions: string[] = Array.from({ length: SLOT_COUNT }, () => '')
 let contentRevision = 0
 const slotGen = new Uint32Array(SLOT_COUNT)
@@ -82,6 +84,53 @@ const slotGen = new Uint32Array(SLOT_COUNT)
 let restoring = false
 let draftTimer = 0
 let draftGen = 0
+let recordEditTimer = 0
+let recordWrites: Promise<void> = Promise.resolve()
+let queuedEditRevision = -1
+
+function writeRecord(record: SavedRecord) {
+  recordWrites = recordWrites.catch(() => undefined).then(() => idbSet('record', record))
+  return recordWrites
+}
+
+export async function savePhotoEdits() {
+  window.clearTimeout(recordEditTimer)
+  if (runtime.phase !== 'play' || countFilled() !== SLOT_COUNT) return
+  if (runtime.saved && !runtime.saveError) return
+  const revision = contentRevision
+  if (queuedEditRevision === revision) { await recordWrites.catch(() => undefined); return }
+  queuedEditRevision = revision
+  const record: SavedRecord = { generated: true, photos: photoSources.map((source) => source ?? ''), captions: captions.slice(), savedAt: Date.now() }
+  try {
+    await writeRecord(record)
+    runtime.saved = revision === contentRevision
+    runtime.saveError = false
+    runtime.hasRecord = true
+  } catch {
+    if (queuedEditRevision === revision) queuedEditRevision = -1
+    runtime.saved = false
+    runtime.saveError = true
+  }
+  publish()
+}
+
+function schedulePhotoEdits() {
+  if (restoring || runtime.phase !== 'play') return
+  runtime.saved = false
+  window.clearTimeout(recordEditTimer)
+  recordEditTimer = window.setTimeout(() => { void savePhotoEdits() }, 350)
+}
+
+export function setPhotoCaption(index: number, value: string) {
+  if (!Number.isInteger(index) || index < 0 || index >= SLOT_COUNT || !photoSources[index]) return
+  const next = Array.from(value).slice(0, CAPTION_LIMIT).join('')
+  if (captions[index] === next) return
+  captions[index] = next
+  contentRevision += 1
+  if (runtime.phase === 'upload') scheduleDraft()
+  else schedulePhotoEdits()
+  publish()
+}
 
 const listeners = new Set<() => void>()
 
@@ -170,6 +219,7 @@ function firstEmpty() {
 export function nextSlotGeneration(slot: number) {
   slotGen[slot] += 1
   pending[slot] = true
+  if (runtime.phase === 'play' || runtime.phase === 'upload') runtime.status = ''
   publish()
   return slotGen[slot]
 }
@@ -177,6 +227,7 @@ export function nextSlotGeneration(slot: number) {
 export function failSlot(slot: number, gen: number) {
   if (slotGen[slot] !== gen) return
   pending[slot] = false
+  if (!restoring) runtime.status = '这张照片未能读取，请换一张重试。'
   publish()
 }
 
@@ -207,6 +258,7 @@ export function addPhotoToScene(texture: THREE.Texture) {
   photoSources[slot] = source || null
   pending[slot] = false
   contentRevision += 1
+  if (!restoring) schedulePhotoEdits()
   publish()
   if (!restoring && runtime.phase === 'upload') scheduleDraft()
 }
@@ -224,6 +276,7 @@ export function removePhotoAt(slot: number) {
 }
 
 function clearPhotos() {
+  window.clearTimeout(recordEditTimer)
   contentRevision += 1
   for (let slot = 0; slot < SLOT_COUNT; slot += 1) {
     slotGen[slot] += 1
@@ -288,6 +341,8 @@ async function restore(sources: (string | null)[]) {
 }
 
 function beginShowcase(quick: boolean) {
+  window.clearTimeout(recordEditTimer)
+  runtime.photoEditing = false
   runtime.morphing = false
   runtime.mode = 'TREE'
   runtime.formed = 'TREE'
@@ -304,7 +359,7 @@ function beginShowcase(quick: boolean) {
 async function persistRecord(photos: string[]) {
   const revision = contentRevision
   const record: SavedRecord = { generated: true, photos, captions: captions.slice(), savedAt: Date.now() }
-  await idbSet('record', record)
+  await writeRecord(record)
   const draft: DraftRecord = {
     active: false,
     photos: Array.from({ length: SLOT_COUNT }, () => null),
@@ -397,6 +452,10 @@ export function cancelNewRecord() {
 }
 
 export async function confirmNewRecord() {
+  if (runtime.phase === 'play') {
+    await savePhotoEdits()
+    if (runtime.saveError) return
+  }
   runtime.morphing = false
   clearPhotos()
   runtime.mode = 'TREE'

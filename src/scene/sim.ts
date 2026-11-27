@@ -1,4 +1,5 @@
 import { PHOTO_COUNT } from '../photos/months'
+import { FOCUS_PHOTO_SCALE } from '../photos/polaroid'
 import { MORPH_BURST, MORPH_DURATION, scatterAmount } from './morph'
 import { getPalette, stepPalette } from './palette'
 import { hasClassicColors, mapPalette } from './colorMapping'
@@ -298,6 +299,7 @@ function updatePhotos(dt: number, k: number) {
     let tz = 0
     let ry = 0
     let rx = 0.16
+    let rz = 0
     let s = 1.12
     if (mode === 'FOCUS' && i === runtime.focusIndex) {
       tx = 0
@@ -305,7 +307,7 @@ function updatePhotos(dt: number, k: number) {
       tz = 35
       rx = 0
       ry = 0
-      s = 4.5
+      s = FOCUS_PHOTO_SCALE
     } else if (mode === 'SCATTER' || mode === 'FOCUS') {
       const ang = hash(i + 3) * Math.PI * 2 + time * (0.25 + hash(i + 4) * 0.4)
       const rad = 11 + (i % 5) * 1.1
@@ -327,14 +329,14 @@ function updatePhotos(dt: number, k: number) {
     } else if (mode === 'TREE') {
       const t = 0.16 + (i / PHOTO_COUNT) * 0.68
       const radius = TREE.radius * (1 - t)
-      const angle = t * 7.5 * Math.PI * 2 + 0.35
+      const angle = t * TREE.turns * Math.PI * 2 + 0.35
       tx = Math.cos(angle) * (radius + 0.55)
       tz = Math.sin(angle) * (radius + 0.55)
       ty = TREE.y0 + t * TREE.height
       ry = Math.atan2(tx, tz)
-      rx = 0.22
-      // A small memory charm, comparable to a 0.56-unit ornament ball.
-      s = 0.46
+      rx = 0.08
+      rz = Math.sin(i * 1.8) * 0.07
+      s = 0.78
     } else {
       const ang = (i / PHOTO_COUNT) * Math.PI * 2 + time * 0.08
       tx = Math.cos(ang) * 9.2
@@ -348,6 +350,7 @@ function updatePhotos(dt: number, k: number) {
     pose.z += (tz - pose.z) * k
     pose.rx += (rx - pose.rx) * k
     pose.ry += (ry - pose.ry) * k
+    pose.rz += (rz - pose.rz) * k
     pose.s += (s - pose.s) * k
     if (mode === 'SCATTER' || (mode === 'FOCUS' && i !== runtime.focusIndex)) pose.ry += dt * 0.4
   }
