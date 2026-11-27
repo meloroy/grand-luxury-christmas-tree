@@ -2,6 +2,8 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { getQuality } from './quality'
+import { hash } from './shapes'
+import { getPalette } from './palette'
 import { getPower } from './sim'
 import { TREE } from './tree'
 
@@ -37,14 +39,17 @@ export function SnowGround() {
     const count = quality.ground
     const positions = new Float32Array(count * 3)
     const phases = new Float32Array(count)
-    const radius = 9.2
     for (let i = 0; i < count; i += 1) {
-      const r = Math.sqrt(Math.random()) * radius
-      const a = Math.random() * Math.PI * 2
+      const band = Math.floor(hash(i + 301) * 5)
+      const a = hash(i + 302) * Math.PI * 2
+      const loose = hash(i + 303) > 0.82
+      const r = loose
+        ? 4 + hash(i + 304) * 6
+        : 4.5 + band * 1.05 + Math.sin(a * 3 + band) * 0.12 + (hash(i + 304) - 0.5) * 0.26
       positions[i * 3] = Math.cos(a) * r
-      positions[i * 3 + 1] = 0
+      positions[i * 3 + 1] = (hash(i + 305) - 0.5) * (loose ? 0.7 : 0.16)
       positions[i * 3 + 2] = Math.sin(a) * r
-      phases[i] = Math.random()
+      phases[i] = hash(i + 306)
     }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
@@ -61,6 +66,8 @@ export function SnowGround() {
         uniforms: {
           uTime: { value: 0 },
           uPower: { value: 0 },
+          uPrimary: { value: getPalette().primary },
+          uSecondary: { value: getPalette().secondary },
         },
         vertexShader: `
           uniform float uTime;
@@ -69,21 +76,25 @@ export function SnowGround() {
           void main() {
             vPhase = aPhase;
             vec3 p = position;
+            float turn = uTime * (0.025 + aPhase * 0.018);
+            p.xz = mat2(cos(turn), -sin(turn), sin(turn), cos(turn)) * p.xz;
             float wave = sin(p.x * 0.55 + uTime * 0.65 + aPhase) * cos(p.z * 0.5 + uTime * 0.5);
             p.y += wave * 0.08 + sin(uTime * 0.8 + aPhase * 6.2831) * 0.06;
             vec4 mv = modelViewMatrix * vec4(p, 1.0);
             gl_Position = projectionMatrix * mv;
-            gl_PointSize = (0.9 + aPhase * 1.15) * (120.0 / max(1.0, -mv.z));
+            gl_PointSize = (0.35 + aPhase * 0.6) * (90.0 / max(1.0, -mv.z));
           }
         `,
         fragmentShader: `
           uniform float uPower;
+          uniform vec3 uPrimary;
+          uniform vec3 uSecondary;
           varying float vPhase;
           void main() {
             vec2 c = gl_PointCoord - vec2(0.5);
-            float a = smoothstep(0.5, 0.05, length(c));
-            float glow = 0.05 + uPower * 0.32;
-            vec3 col = mix(vec3(0.72, 0.82, 0.9), vec3(0.95, 0.97, 1.0), vPhase);
+            float a = 1.0 - smoothstep(0.02, 0.5, length(c));
+            float glow = (0.025 + uPower * 0.28) * (0.5 + vPhase * 0.5);
+            vec3 col = mix(uPrimary * 0.78, uSecondary * 0.98, step(0.52, vPhase));
             gl_FragColor = vec4(col, a * glow);
           }
         `,
@@ -136,12 +147,12 @@ export function SnowFall({ count }: { count: number }) {
     <points geometry={geometry} frustumCulled={false} renderOrder={3}>
       <pointsMaterial
         map={map}
-        color="#ffffff"
-        size={0.16}
+        color="#fff1c9"
+        size={0.08}
         transparent
         depthWrite={false}
         blending={THREE.AdditiveBlending}
-        opacity={0.75}
+        opacity={0.42}
         sizeAttenuation
         toneMapped={false}
       />

@@ -1,12 +1,21 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { getPhotoTexture } from '../session/store'
+import { PHOTO_COUNT } from '../photos/months'
+import { focusMonth, getPhotoTexture, nextPhoto, runtime } from '../session/store'
 import { getPhotoPose, getPower } from './sim'
 
 function Polaroid({ index, texture }: { index: number; texture: THREE.Texture }) {
   const ref = useRef<THREE.Group>(null)
   const frame = useRef<THREE.MeshStandardMaterial>(null)
+  const image = texture.image as HTMLImageElement
+  const aspect = image.naturalWidth / image.naturalHeight
+  // Fit the original aspect ratio within the existing scene budget.
+  // The uploaded pixels and texture UVs remain unchanged.
+  const width = Math.min(0.96, 1.12 * aspect)
+  const height = width / aspect
+  const border = Math.min(width, height) * 0.025
+  const thickness = 0.012
 
   useFrame(() => {
     const group = ref.current
@@ -19,11 +28,22 @@ function Polaroid({ index, texture }: { index: number; texture: THREE.Texture })
   })
 
   return (
-    <group ref={ref}>
+    <group ref={ref} onClick={(event) => {
+      if (event.delta > 5) return
+      event.stopPropagation()
+      if (runtime.mode === 'FOCUS' && runtime.focusIndex === index) nextPhoto(1)
+      else focusMonth(index)
+    }} onPointerOver={(event) => {
+      event.stopPropagation()
+      document.body.style.cursor = 'pointer'
+    }} onPointerOut={() => { document.body.style.cursor = '' }}>
       <mesh>
-        <boxGeometry args={[1.12, 1.38, 0.055]} />
+        <boxGeometry args={[width + border * 2, height + border * 2, thickness]} />
         <meshStandardMaterial
           ref={frame}
+          transparent
+          opacity={0.1}
+          depthWrite={false}
           color="#f0d48a"
           metalness={0.94}
           roughness={0.22}
@@ -31,8 +51,13 @@ function Polaroid({ index, texture }: { index: number; texture: THREE.Texture })
           emissiveIntensity={0.4}
         />
       </mesh>
-      <mesh position={[0, -0.03, 0.034]}>
-        <planeGeometry args={[0.96, 1.12]} />
+      <mesh position={[0, 0, thickness / 2 + 0.001]}>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial map={texture} toneMapped />
+      </mesh>
+      {/* A separate outward-facing back keeps the image readable, not mirrored. */}
+      <mesh position={[0, 0, -thickness / 2 - 0.001]} rotation={[0, Math.PI, 0]}>
+        <planeGeometry args={[width, height]} />
         <meshBasicMaterial map={texture} toneMapped />
       </mesh>
     </group>
@@ -42,7 +67,7 @@ function Polaroid({ index, texture }: { index: number; texture: THREE.Texture })
 export function PhotoWall() {
   const photos = useMemo(
     () =>
-      Array.from({ length: 16 }, (_, index) => {
+      Array.from({ length: PHOTO_COUNT }, (_, index) => {
         const texture = getPhotoTexture(index)
         return texture ? { index, texture } : null
       }).filter((item): item is { index: number; texture: THREE.Texture } => item !== null),

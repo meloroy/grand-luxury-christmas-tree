@@ -1,9 +1,13 @@
+import { PHOTO_COUNT } from '../photos/months'
+import { MORPH_BURST, MORPH_DURATION, scatterAmount } from './morph'
+import { getPalette, stepPalette } from './palette'
+import { mapPalette } from './colorMapping'
 import * as THREE from 'three'
 import type { QualityProfile } from './quality'
 import { revealCtrl } from './reveal'
 import { buildClouds, buildScatter, hash, type ShapeName } from './shapes'
-import { POINTER_RADIUS, SCATTER_CENTER_Y, TREE } from './tree'
-import { finishReveal, runtime, type Mode } from '../session/store'
+import { SCATTER_CENTER_Y, TREE } from './tree'
+import { finishMorph, finishReveal, runtime, type Mode } from '../session/store'
 
 export type Pose = {
   x: number
@@ -21,7 +25,7 @@ let ornamentCount = 0
 let particleSize = 0.05
 
 let pos = new Float32Array(0)
-let vel = new Float32Array(0)
+let drift = new Float32Array(0)
 let col = new Float32Array(0)
 let rot = new Float32Array(0)
 let phase = new Float32Array(0)
@@ -34,7 +38,7 @@ let scatterCol = new Float32Array(0)
 let clouds: ReturnType<typeof buildClouds> | null = null
 
 let rPos = new Float32Array(0)
-let rVel = new Float32Array(0)
+let rDrift = new Float32Array(0)
 let rHome = new Float32Array(0)
 let rAxis = new Float32Array(0)
 let rSpin = new Float32Array(0)
@@ -43,20 +47,19 @@ let rTangent = new Float32Array(0)
 let rColor = new Float32Array(0)
 let rStretch = 0.2
 
-const photoNow: Pose[] = Array.from({ length: 16 }, () => ({ x: 0, y: 12, z: 8, rx: 0, ry: 0, rz: 0, s: 0.2 }))
+const photoNow: Pose[] = Array.from({ length: PHOTO_COUNT }, () => ({ x: 0, y: 12, z: 8, rx: 0, ry: 0, rz: 0, s: 0.2 }))
 const ornamentNow: Pose[] = []
 const ornamentAnchor: Pose[] = []
 
 let power = 0
 let simTime = 0
+let seenMorph = 0
+let morphElapsed = 0
+let morphFrom = new Float32Array(0)
+let ribbonFrom = new Float32Array(0)
+const surfaceTint = { r: 0, g: 0, b: 0 }
+const burstTint = { r: 0, g: 0, b: 0 }
 
-const pointer = { active: false, x: 0, y: 0, z: 0 }
-const raycaster = new THREE.Raycaster()
-const plane = new THREE.Plane()
-const hit = new THREE.Vector3()
-const center = new THREE.Vector3()
-const normal = new THREE.Vector3()
-const ndc = new THREE.Vector2()
 
 export function getPower() {
   return power
@@ -82,14 +85,12 @@ function shapeOf(mode: Mode): ShapeName {
 function resetMotion() {
   pos.set(home)
   for (let i = 0; i < particleCount; i += 1) pos[i * 3 + 1] += SCATTER_CENTER_Y
-  vel.fill(0)
   col.set(scatterCol)
   rPos.set(rHome)
   for (let i = 0; i < ribbonCount; i += 1) rPos[i * 3 + 1] += SCATTER_CENTER_Y
-  rVel.fill(0)
   rStretch = 0.08
-  for (let i = 0; i < 16; i += 1) {
-    const ang = (i / 16) * Math.PI * 2
+  for (let i = 0; i < PHOTO_COUNT; i += 1) {
+    const ang = (i / PHOTO_COUNT) * Math.PI * 2
     photoNow[i].x = Math.cos(ang) * 10
     photoNow[i].y = 14
     photoNow[i].z = Math.sin(ang) * 10
@@ -119,7 +120,7 @@ export function mountSim(quality: QualityProfile) {
     spin = scatter.speed
     scatterCol = scatter.colors
     pos = new Float32Array(particleCount * 3)
-    vel = new Float32Array(particleCount * 3)
+    drift = buildDrift(particleCount, 1)
     col = new Float32Array(particleCount * 3)
     rot = new Float32Array(particleCount)
     phase = new Float32Array(particleCount)
@@ -136,21 +137,22 @@ export function mountSim(quality: QualityProfile) {
     rAxis = ribbons.axis
     rSpin = ribbons.speed
     rPos = new Float32Array(ribbonCount * 3)
-    rVel = new Float32Array(ribbonCount * 3)
+    rDrift = buildDrift(ribbonCount, 0.4)
     rGarland = new Float32Array(ribbonCount * 3)
     rTangent = new Float32Array(ribbonCount * 3)
     rColor = new Float32Array(ribbonCount * 3)
     const metals = [
-      [1, 0.84, 0.5],
-      [0.78, 0.88, 1],
-      [0.5, 0.74, 1],
+      [0.22, 0.92, 0.69],
+      [1, 0.88, 0.36],
     ]
     for (let i = 0; i < ribbonCount; i += 1) {
-      const t = i / Math.max(1, ribbonCount - 1)
-      const radius = TREE.radius * (1 - t) * 0.99
-      const angle = t * 8 * Math.PI * 2
-      const ap = 8 * Math.PI * 2
-      const rp = -TREE.radius
+      const lane = i % 2
+      const t = Math.pow(Math.floor(i / 2) / Math.max(1, Math.ceil(ribbonCount / 2) - 1), 0.78)
+      const looseness = (1 - t) ** 2
+      const radius = TREE.radius * Math.pow(1 - t, 0.88) * (1 + (hash(i + 811) - 0.5) * looseness * 0.18)
+      const angle = t * TREE.turns * Math.PI * 2 + lane * Math.PI + (hash(i + 812) - 0.5) * looseness * 0.18
+      const ap = TREE.turns * Math.PI * 2
+      const rp = -TREE.radius * 0.88 * Math.pow(Math.max(0.002, 1 - t), -0.12)
       rGarland[i * 3] = Math.cos(angle) * radius
       rGarland[i * 3 + 1] = TREE.y0 + t * TREE.height
       rGarland[i * 3 + 2] = Math.sin(angle) * radius
@@ -161,10 +163,11 @@ export function mountSim(quality: QualityProfile) {
       rTangent[i * 3] = dx / len
       rTangent[i * 3 + 1] = dy / len
       rTangent[i * 3 + 2] = dz / len
-      const metal = metals[i % 3]
-      rColor[i * 3] = metal[0]
-      rColor[i * 3 + 1] = metal[1]
-      rColor[i * 3 + 2] = metal[2]
+      const metal = metals[lane]
+      const brightness = 0.6 + t * 0.4
+      rColor[i * 3] = metal[0] * brightness
+      rColor[i * 3 + 1] = metal[1] * brightness
+      rColor[i * 3 + 2] = metal[2] * brightness
     }
   }
   if (ornamentCount !== quality.ornaments) {
@@ -224,65 +227,30 @@ function spinOffset(
   return spun
 }
 
-export function aimPointer(camera: THREE.Camera, pointerNdc: THREE.Vector2, group: THREE.Group, active: boolean) {
-  pointer.active = active && runtime.phase === 'play'
-  if (!pointer.active) return
-  center.set(0, SCATTER_CENTER_Y, 0)
-  group.localToWorld(center)
-  camera.getWorldDirection(normal)
-  plane.setFromNormalAndCoplanarPoint(normal, center)
-  ndc.copy(pointerNdc)
-  raycaster.setFromCamera(ndc, camera)
-  if (!raycaster.ray.intersectPlane(plane, hit)) {
-    pointer.active = false
-    return
+// Independent phases keep the cloud floating without bending the whole silhouette.
+function buildDrift(count: number, scale: number) {
+  const motion = new Float32Array(count * 3)
+  for (let i = 0; i < count; i += 1) {
+    motion[i * 3] = hash(i + 701) * Math.PI * 2
+    motion[i * 3 + 1] = 0.18 + hash(i + 702) * 0.3
+    // A few loose motes drift farther; most stay near their shape anchor.
+    motion[i * 3 + 2] = scale * (hash(i + 703) > 0.95 ? 0.55 + hash(i + 704) * 0.65 : 0.06 + hash(i + 704) * 0.13)
   }
-  group.worldToLocal(hit)
-  pointer.x = hit.x
-  pointer.y = hit.y
-  pointer.z = hit.z
-}
-
-const pushed = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 }
-
-function pushTarget(x: number, y: number, z: number, tx: number, ty: number, tz: number) {
-  pushed.x = tx
-  pushed.y = ty
-  pushed.z = tz
-  pushed.vx = 0
-  pushed.vy = 0
-  pushed.vz = 0
-  if (!pointer.active) return pushed
-  const dx = x - pointer.x
-  const dy = y - pointer.y
-  const dz = z - pointer.z
-  const dist = Math.hypot(dx, dy, dz)
-  if (dist >= POINTER_RADIUS || dist < 1e-4) return pushed
-  const fall = (1 - dist / POINTER_RADIUS) ** 1.25
-  const push = fall * 6.4
-  const inv = push / dist
-  pushed.x = x + dx * inv
-  pushed.y = y + dy * inv
-  pushed.z = z + dz * inv
-  pushed.vx = dx * inv * 0.28
-  pushed.vy = dy * inv * 0.28
-  pushed.vz = dz * inv * 0.28
-  return pushed
+  return motion
 }
 
 function stepPoints(
   count: number,
   positions: Float32Array,
-  velocity: Float32Array,
+  motion: Float32Array,
   targets: Float32Array | null,
   homeArr: Float32Array | null,
   axisArr: Float32Array | null,
   spinArr: Float32Array | null,
   k: number,
-  dt: number,
   time: number,
+  scatterMix = 0,
 ) {
-  const damp = Math.exp(-dt * 2.8)
   for (let i = 0; i < count; i += 1) {
     const o = i * 3
     let tx = 0
@@ -298,32 +266,32 @@ function stepPoints(
       ty = spun.y
       tz = spun.z
     }
-    let x = positions[o]
-    let y = positions[o + 1]
-    let z = positions[o + 2]
-    let vx = velocity[o]
-    let vy = velocity[o + 1]
-    let vz = velocity[o + 2]
-    const next = pushTarget(x, y, z, tx, ty, tz)
-    vx = (vx + next.vx) * damp
-    vy = (vy + next.vy) * damp
-    vz = (vz + next.vz) * damp
-    x += vx * dt + (next.x - x) * k
-    y += vy * dt + (next.y - y) * k
-    z += vz * dt + (next.z - z) * k
-    positions[o] = x
-    positions[o + 1] = y
-    positions[o + 2] = z
-    velocity[o] = vx
-    velocity[o + 1] = vy
-    velocity[o + 2] = vz
+    if (targets && scatterMix > 0 && homeArr && axisArr && spinArr) {
+      const spread = spinOffset(homeArr, axisArr, spinArr, i, time * 0.55)
+      tx += (spread.x * 0.72 - tx) * scatterMix
+      ty += ((spread.y - SCATTER_CENTER_Y) * 0.72 + SCATTER_CENTER_Y - ty) * scatterMix
+      tz += (spread.z * 0.72 - tz) * scatterMix
+    }
+    const phase = motion[o]
+    const t = time * motion[o + 1]
+    const height = THREE.MathUtils.clamp((ty - TREE.y0) / TREE.height, 0, 1)
+    const driftGain = runtime.mode === 'TEXT' ? 0.12
+      : runtime.mode === 'ELK' || runtime.mode === 'SANTA' ? 0.28
+      : runtime.mode === 'TREE' ? 0.18 + (1 - height) ** 2 * 1.25 : 1
+    const amplitude = motion[o + 2] * driftGain
+    tx += Math.sin(t + phase) * amplitude
+    ty += Math.sin(t * 0.73 + phase * 2.3) * amplitude * 1.4
+    tz += Math.cos(t * 0.87 + phase * 1.7) * amplitude
+    positions[o] += (tx - positions[o]) * k
+    positions[o + 1] += (ty - positions[o + 1]) * k
+    positions[o + 2] += (tz - positions[o + 2]) * k
   }
 }
 
 function updatePhotos(dt: number, k: number) {
-  const mode = runtime.mode
+  const mode = runtime.morphing && morphElapsed < MORPH_BURST ? 'SCATTER' : runtime.mode
   const time = simTime
-  for (let i = 0; i < 16; i += 1) {
+  for (let i = 0; i < PHOTO_COUNT; i += 1) {
     const pose = photoNow[i]
     let tx = 0
     let ty = 5
@@ -348,7 +316,7 @@ function updatePhotos(dt: number, k: number) {
       rx = 0.2
       s = 0.82
     } else if (mode === 'GALLERY') {
-      const t = i / 16
+      const t = i / PHOTO_COUNT
       const ang = t * Math.PI * 4 + time * 0.12
       const rad = 3.2 + t * 9.5
       tx = Math.cos(ang) * rad
@@ -357,7 +325,7 @@ function updatePhotos(dt: number, k: number) {
       ry = Math.atan2(tx, tz)
       s = 1.25
     } else if (mode === 'TREE') {
-      const t = 0.16 + (i / 16) * 0.68
+      const t = 0.16 + (i / PHOTO_COUNT) * 0.68
       const radius = TREE.radius * (1 - t)
       const angle = t * 7.5 * Math.PI * 2 + 0.35
       tx = Math.cos(angle) * (radius + 0.55)
@@ -365,9 +333,10 @@ function updatePhotos(dt: number, k: number) {
       ty = TREE.y0 + t * TREE.height
       ry = Math.atan2(tx, tz)
       rx = 0.22
-      s = 1.55
+      // A small memory charm, comparable to a 0.56-unit ornament ball.
+      s = 0.46
     } else {
-      const ang = (i / 16) * Math.PI * 2 + time * 0.08
+      const ang = (i / PHOTO_COUNT) * Math.PI * 2 + time * 0.08
       tx = Math.cos(ang) * 9.2
       tz = Math.sin(ang) * 9.2
       ty = 4.2 + Math.sin(ang * 2) * 1.2
@@ -385,7 +354,7 @@ function updatePhotos(dt: number, k: number) {
 }
 
 function updateOrnaments(k: number) {
-  const mode = runtime.mode
+  const mode = runtime.morphing && morphElapsed < MORPH_BURST ? 'SCATTER' : runtime.mode
   const time = simTime
   for (let i = 0; i < ornamentCount; i += 1) {
     const pose = ornamentNow[i]
@@ -425,10 +394,21 @@ function updateOrnaments(k: number) {
   }
 }
 
-export function stepSim(dt: number, camera: THREE.Camera, pointerNdc: THREE.Vector2, group: THREE.Group, pointerActive: boolean) {
+export function stepSim(dt: number) {
+  stepPalette(dt)
   if (!clouds || particleCount === 0) return
   const step = Math.min(0.05, Math.max(0.001, dt))
   simTime += step
+  if (runtime.morphing) {
+    if (seenMorph !== runtime.morphId) {
+      seenMorph = runtime.morphId
+      morphElapsed = 0
+      morphFrom = pos.slice()
+      ribbonFrom = rPos.slice()
+    }
+    morphElapsed += step
+    if (morphElapsed >= MORPH_DURATION) finishMorph()
+  }
   if (runtime.phase === 'reveal') {
     if (!revealCtrl.startedAt) revealCtrl.startedAt = performance.now()
     revealCtrl.t = Math.min(1, (performance.now() - revealCtrl.startedAt) / (revealCtrl.duration * 1000))
@@ -437,39 +417,44 @@ export function stepSim(dt: number, camera: THREE.Camera, pointerNdc: THREE.Vect
   const revealPower = Math.max(0, (revealCtrl.t - 0.18) / 0.82)
   const targetPower = runtime.phase === 'reveal' ? revealPower : runtime.phase === 'play' && runtime.powered ? 1 : 0
   power += (targetPower - power) * (1 - Math.exp(-Math.min(dt, 0.12) * 1.6))
-  const gain = runtime.phase === 'reveal' ? 1.4 + revealCtrl.t * 3.2 : 2.6
+  const gain = runtime.phase === 'reveal' ? 1.4 + revealCtrl.t * 3.2 : runtime.morphing ? 6 : 2.6
   const k = 1 - Math.exp(-Math.min(dt, 0.12) * gain)
-  aimPointer(camera, pointerNdc, group, pointerActive)
 
   const mode = runtime.mode
   const scattered = mode === 'SCATTER' || mode === 'FOCUS'
   const cloud = clouds[shapeOf(mode)]
   const time = simTime
+  const bursting = runtime.morphing && morphElapsed < MORPH_BURST
+  const spread = runtime.morphing ? scatterAmount(morphElapsed) : 0
 
   if (scattered) {
-    stepPoints(particleCount, pos, vel, null, home, axis, spin, k, step, time)
+    stepPoints(particleCount, pos, drift, null, home, axis, spin, k, time)
   } else {
-    stepPoints(particleCount, pos, vel, cloud.positions, null, null, null, k, step, time)
+    stepPoints(particleCount, pos, drift, bursting ? morphFrom : cloud.positions, home, axis, spin, k, time, spread)
   }
   const colorTarget = scattered ? scatterCol : cloud.colors
+  const palette = getPalette()
   for (let i = 0; i < particleCount; i += 1) {
     const o = i * 3
-    col[o] += (colorTarget[o] - col[o]) * k
-    col[o + 1] += (colorTarget[o + 1] - col[o + 1]) * k
-    col[o + 2] += (colorTarget[o + 2] - col[o + 2]) * k
+    const height = THREE.MathUtils.clamp(((scattered ? pos[o + 1] : cloud.positions[o + 1]) - TREE.y0) / TREE.height, 0, 1)
+    mapPalette(colorTarget[o], colorTarget[o + 1], colorTarget[o + 2], height, mode === 'TREE', palette, surfaceTint)
+    if (spread > 0) mapPalette(scatterCol[o], scatterCol[o + 1], scatterCol[o + 2], height, false, palette, burstTint)
+    col[o] += (THREE.MathUtils.lerp(surfaceTint.r, burstTint.r, spread) - col[o]) * k
+    col[o + 1] += (THREE.MathUtils.lerp(surfaceTint.g, burstTint.g, spread) - col[o + 1]) * k
+    col[o + 2] += (THREE.MathUtils.lerp(surfaceTint.b, burstTint.b, spread) - col[o + 2]) * k
   }
 
   const ribbonTree = mode === 'TREE'
-  const ribbonStretch = ribbonTree ? 0.46 : mode === 'GALLERY' ? 0.22 : 0.08
+  const ribbonStretch = ribbonTree ? 0.035 : mode === 'GALLERY' ? 0.22 : 0.08
   rStretch += (ribbonStretch - rStretch) * k
   const stride = Math.max(1, Math.floor(particleCount / ribbonCount))
   if (scattered) {
-    stepPoints(ribbonCount, rPos, rVel, null, rHome, rAxis, rSpin, k, step, time)
+    stepPoints(ribbonCount, rPos, rDrift, null, rHome, rAxis, rSpin, k, time)
   } else if (ribbonTree) {
-    stepPoints(ribbonCount, rPos, rVel, rGarland, null, null, null, k, step, time)
+    stepPoints(ribbonCount, rPos, rDrift, bursting ? ribbonFrom : rGarland, rHome, rAxis, rSpin, k, time, spread)
   } else {
     const sampled = sampleRibbonTargets(cloud.positions, stride)
-    stepPoints(ribbonCount, rPos, rVel, sampled, null, null, null, k, step, time)
+    stepPoints(ribbonCount, rPos, rDrift, bursting ? ribbonFrom : sampled, rHome, rAxis, rSpin, k, time, spread)
   }
 
   updatePhotos(step, k)
@@ -515,12 +500,11 @@ export function writeParticles(mesh: THREE.InstancedMesh) {
   const colors = mesh.instanceColor?.array as Float32Array | undefined
   if (!colors) return
   const glow = 0.07 + 0.93 * power
-  const pulse = 0.5 + 0.5 * Math.sin(simTime * 1.7)
-  const tiffany = pulse > 0.45
+  const palette = getPalette()
   for (let i = 0; i < particleCount; i += 1) {
     const o = i * 3
     const tw = 0.8 + 0.2 * Math.sin(simTime * (2.1 + phase[i]) + phase[i] * 6.2)
-    const s = size[i] * tw * (0.55 + 0.45 * Math.min(1, glow + 0.25))
+    const s = size[i] * tw * (0.55 + 0.45 * Math.min(1, glow + 0.25)) * (runtime.mode === 'TEXT' ? 0.6 : 1)
     const c = Math.cos(rot[i])
     const sn = Math.sin(rot[i])
     writeBasis(matrices, i * 16, c * s, 0, -sn * s, 0, s, 0, sn * s, 0, c * s, pos[o], pos[o + 1], pos[o + 2])
@@ -529,14 +513,14 @@ export function writeParticles(mesh: THREE.InstancedMesh) {
     let b = col[o + 2]
     if (accent[i] && power > 0.35) {
       const mix = 0.42
-      const tr = tiffany ? 0.506 : 0.118
-      const tg = tiffany ? 0.847 : 0.349
-      const tb = tiffany ? 0.816 : 0.349
+      const tr = palette.secondary.r
+      const tg = palette.secondary.g
+      const tb = palette.secondary.b
       r = r * (1 - mix) + tr * mix
       g = g * (1 - mix) + tg * mix
       b = b * (1 - mix) + tb * mix
     }
-    const gain = glow * 1.35
+    const gain = glow * 0.95
     colors[o] = r * gain
     colors[o + 1] = g * gain
     colors[o + 2] = b * gain
@@ -551,10 +535,11 @@ export function writeRibbons(mesh: THREE.InstancedMesh) {
   if (!colors) return
   const glow = 0.05 + 0.95 * power
   const treeMode = runtime.mode === 'TREE'
-  const ribbonBoost = treeMode ? 1.45 : runtime.mode === 'GALLERY' ? 0.4 : 0.015
-  const sx = 0.05
-  const sy = Math.max(0.05, rStretch)
-  const sz = 0.02
+  const palette = getPalette()
+  const ribbonBoost = treeMode ? 0.72 : runtime.mode === 'GALLERY' ? 0.4 : 0.015
+  const sx = 0.018
+  const sy = Math.max(0.025, rStretch)
+  const sz = 0.012
   for (let i = 0; i < ribbonCount; i += 1) {
     const o = i * 3
     let yx = 0
@@ -607,9 +592,11 @@ export function writeRibbons(mesh: THREE.InstancedMesh) {
       rPos[o + 1],
       rPos[o + 2],
     )
-    colors[o] = rColor[o] * glow * ribbonBoost
-    colors[o + 1] = rColor[o + 1] * glow * ribbonBoost
-    colors[o + 2] = rColor[o + 2] * glow * ribbonBoost
+    const height = THREE.MathUtils.clamp((rGarland[o + 1] - TREE.y0) / TREE.height, 0, 1)
+    const tint = mapPalette(rColor[o], rColor[o + 1], rColor[o + 2], height, treeMode, palette, surfaceTint)
+    colors[o] = tint.r * glow * ribbonBoost
+    colors[o + 1] = tint.g * glow * ribbonBoost
+    colors[o + 2] = tint.b * glow * ribbonBoost
   }
   mesh.instanceMatrix.needsUpdate = true
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true

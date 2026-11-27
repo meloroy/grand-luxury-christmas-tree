@@ -11,8 +11,8 @@ import { Ribbons } from './Ribbons'
 import { getPower, mountSim, stepSim } from './sim'
 import { SnowGround } from './Snow'
 import { Star } from './Star'
+import { getPalette } from './palette'
 
-const pointer = { active: false }
 
 export function Showcase() {
   const group = useRef<THREE.Group>(null)
@@ -28,38 +28,15 @@ export function Showcase() {
 
   useEffect(() => {
     const element = gl.domElement
-    const down = (event: PointerEvent) => {
-      if (event.pointerType === 'mouse' && event.button !== 0) return
-      pointer.active = true
-      startMusic()
-    }
-    const up = (event: PointerEvent) => {
-      if (event.pointerType !== 'mouse') pointer.active = false
-    }
-    const move = (event: PointerEvent) => {
-      if (event.pointerType === 'mouse') pointer.active = true
-    }
-    const leave = () => {
-      pointer.active = false
-    }
+    const down = () => startMusic()
     element.addEventListener('pointerdown', down)
-    element.addEventListener('pointerup', up)
-    element.addEventListener('pointercancel', up)
-    element.addEventListener('pointermove', move)
-    element.addEventListener('pointerleave', leave)
-    return () => {
-      element.removeEventListener('pointerdown', down)
-      element.removeEventListener('pointerup', up)
-      element.removeEventListener('pointercancel', up)
-      element.removeEventListener('pointermove', move)
-      element.removeEventListener('pointerleave', leave)
-    }
+    return () => element.removeEventListener('pointerdown', down)
   }, [gl])
 
   useFrame((state, dt) => {
     const root = group.current
     if (!root) return
-    stepSim(dt, state.camera, state.pointer, root, pointer.active)
+    stepSim(dt)
     const playing = runtime.phase === 'play'
     const focus = runtime.mode === 'FOCUS'
     const yaw = playing && runtime.handActive && !focus ? runtime.handX * 1.35 : 0
@@ -67,6 +44,7 @@ export function Showcase() {
     root.rotation.y = THREE.MathUtils.damp(root.rotation.y, yaw, 3.1, dt)
     root.rotation.x = THREE.MathUtils.damp(root.rotation.x, pitch, 3.1, dt)
     const glow = getPower()
+    if (accent.current) accent.current.color.copy(getPalette().primary)
     if (fill.current) fill.current.intensity = 0.6 + glow * 7
     if (accent.current) accent.current.intensity = glow * 3.2 * (0.65 + 0.35 * Math.sin(state.clock.elapsedTime * 1.6))
     if (ambient.current) ambient.current.intensity = 0.05 + glow * 0.12

@@ -1,12 +1,13 @@
 import type { HandLandmarker } from '@mediapipe/tasks-vision'
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import { runtime, setCamera, setMode, type Mode } from '../session/store'
+import { nextPhoto, nextShape, runtime, setCamera, setMode, type Mode } from '../session/store'
 
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
 
 const HOLD_MS = 420
 const TIPS = [4, 8, 12, 16, 20]
+type HandAction = Mode | 'NEXT'
 
 function isPermissionError(error: unknown) {
   return (
@@ -41,13 +42,20 @@ function prepareInlineVideo(video: HTMLVideoElement) {
   video.setAttribute('webkit-playsinline', 'true')
 }
 
-function gestureFromLandmarks(landmarks: { x: number; y: number }[]): Mode | null {
+function gestureFromLandmarks(landmarks: { x: number; y: number }[]): HandAction | null {
   const wrist = landmarks[0]
   const thumb = landmarks[4]
   const index = landmarks[8]
   if (!wrist || !thumb || !index) return null
   const pinch = Math.hypot(thumb.x - index.x, thumb.y - index.y)
   if (pinch < 0.05) return 'FOCUS'
+  const extended = (tip: number, joint: number) => {
+    const end = landmarks[tip]
+    const bend = landmarks[joint]
+    if (!end || !bend) return false
+    return Math.hypot(end.x - wrist.x, end.y - wrist.y) > Math.hypot(bend.x - wrist.x, bend.y - wrist.y) * 1.25
+  }
+  if (extended(8, 6) && extended(12, 10) && !extended(16, 14) && !extended(20, 18)) return 'NEXT'
   let sum = 0
   for (const tip of TIPS) {
     const point = landmarks[tip]
@@ -178,7 +186,7 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
       let lastStamp = -1
       let smoothX = 0.5
       let smoothY = 0.5
-      const hold = { mode: null as Mode | null, since: 0, fired: false }
+      const hold = { mode: null as HandAction | null, since: 0, fired: false }
 
       const tick = (now: number) => {
         if (cleaned || !landmarker) return
@@ -224,6 +232,11 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
           return
         }
         if (now - hold.since < HOLD_MS || hold.fired) return
+        if (runtime.mode === 'FOCUS' && (desired === 'FOCUS' || desired === 'NEXT')) {
+          nextPhoto(1, 'gesture')
+          hold.fired = true
+          return
+        }
         if (runtime.gestureLock) {
           if (desired === runtime.gestureLock) return
           runtime.gestureLock = null
@@ -231,7 +244,8 @@ export function useHandCamera(videoRef: RefObject<HTMLVideoElement | null>) {
           hold.fired = false
           return
         }
-        setMode(desired, 'gesture')
+        if (desired === 'NEXT') nextShape(1, 'gesture')
+        else setMode(desired, 'gesture')
         hold.fired = true
       }
 

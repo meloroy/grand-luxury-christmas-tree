@@ -1,4 +1,6 @@
+import { fillElk, fillSanta } from './characters'
 import { TREE } from './tree'
+import { CHRISTMAS_FONT } from './textFont'
 
 export type ShapeName = 'TREE' | 'GIFT' | 'HAT' | 'STOCKING' | 'TEXT' | 'ELK' | 'SANTA' | 'GALLERY'
 
@@ -23,50 +25,31 @@ function write(positions: Float32Array, colors: Float32Array, i: number, x: numb
 }
 
 function fillTree(count: number, positions: Float32Array, colors: Float32Array) {
-  const maxRadius = TREE.radius
   for (let i = 0; i < count; i += 1) {
-    const spiral = hash(i + 4) > 0.58
-    const tt = spiral ? i / count : hash(i + 5)
-    const t = Math.min(0.999, Math.max(0, tt))
-    let radius = maxRadius * (1 - t)
-    let angle = t * 50 * Math.PI
-    if (!spiral) {
-      radius *= Math.sqrt(hash(i + 6))
-      angle = hash(i + 7) * Math.PI * 2
-    } else {
-      const tube = (0.08 + 0.42 * (1 - t)) * Math.sqrt(hash(i + 8))
-      const a2 = hash(i + 9) * Math.PI * 2
-      radius = Math.max(0, radius + Math.cos(a2) * tube * 0.35)
-      angle += Math.sin(a2) * 0.18
-    }
+    const layer = hash(i + 4)
+    // Bias the sample count toward the crown, then open the lower coils.
+    const t = Math.min(0.998, Math.pow(hash(i + 5), 0.78))
+    const looseness = (1 - t) ** 2
+    const taper = Math.pow(1 - t, 0.88)
+    const spiral = layer < 0.68 + t * 0.3
+    const lane = hash(i + 6) > 0.64 ? 1 : 0
+    const angle = spiral
+      ? t * TREE.turns * Math.PI * 2 + lane * Math.PI + (hash(i + 7) - 0.5) * (0.06 + looseness * 0.55)
+      : hash(i + 7) * Math.PI * 2
+    const shell = spiral
+      ? 1 + (hash(i + 8) - 0.5) * (0.025 + looseness * 0.32)
+      : 1 + (hash(i + 8) - 0.35) * (0.08 + looseness * 0.65)
+    const radius = TREE.radius * taper * shell
     const x = Math.cos(angle) * radius
     const z = Math.sin(angle) * radius
-    const y = TREE.y0 + t * TREE.height
-    const gAng = t * 7.5 * Math.PI * 2
-    const garland = Math.hypot(x - Math.cos(gAng) * maxRadius * (1 - t), z - Math.sin(gAng) * maxRadius * (1 - t))
-    const spark = hash(i + 12)
-    let r: number
-    let g: number
-    let b: number
-    if (garland < 0.42 || spark > 0.955) {
-      r = 0.95
-      g = 0.72 + spark * 0.2
-      b = 0.28
-    } else if (spark > 0.9) {
-      r = 0.55
-      g = 0.95
-      b = 0.62
-    } else if (spark < 0.03) {
-      r = 0.506
-      g = 0.847
-      b = 0.816
-    } else {
-      const lift = 0.72 + hash(i + 13) * 0.55
-      r = Math.min(1, 0.1 * lift)
-      g = Math.min(1, 0.78 * lift)
-      b = Math.min(1, 0.32 * lift)
-    }
-    write(positions, colors, i, x, y + (hash(i + 15) - 0.5) * 0.08, z, r, g, b)
+    const y = TREE.y0 + t * TREE.height + (hash(i + 9) - 0.5) * (0.05 + looseness * 0.38)
+    const gold = lane === 1
+    const light = (spiral ? 0.55 : 0.18) + hash(i + 11) * (spiral ? 0.4 : 0.2)
+    const depth = 0.78 + (z / TREE.radius + 1) * 0.11
+    const r = (gold ? light : light * 0.22) * depth
+    const g = (gold ? light * 0.88 : light * 0.92) * depth
+    const b = (gold ? light * 0.36 : light * 0.69) * depth
+    write(positions, colors, i, x, y, z, r, g, b)
   }
 }
 
@@ -246,150 +229,25 @@ function paintStocking(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.stroke()
 }
 
-function paintLine(ctx: CanvasRenderingContext2D, text: string, y: number, w: number, size: number) {
-  const letters = [...text]
-  const widths = letters.map((letter) => ctx.measureText(letter).width)
-  const gap = size * 0.16
-  const total = widths.reduce((sum, width) => sum + width, 0) + gap * (letters.length - 1)
-  let x = (w - total) / 2
-  letters.forEach((letter, index) => {
-    ctx.fillText(letter, x + widths[index] / 2, y)
-    x += widths[index] + gap
-  })
-}
-
 function paintText(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.clearRect(0, 0, w, h)
-  ctx.fillStyle = '#f3d78a'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  const family = '"Liberation Serif", "Nimbus Roman", "Times New Roman", Times, serif'
-  let size = 188
-  ctx.font = `700 ${size}px ${family}`
-  const widest = () => {
-    const letters = [...'CHRISTMAS']
-    const widths = letters.map((letter) => ctx.measureText(letter).width)
-    return widths.reduce((sum, width) => sum + width, 0) + size * 0.16 * (letters.length - 1)
+  ctx.fillStyle = '#ffe6ae'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  const text = 'Merry Christmas'
+  let size = 300
+  ctx.font = `400 ${size}px "${CHRISTMAS_FONT}"`
+  let metrics = ctx.measureText(text)
+  while ((metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight > w * 0.88 ||
+    metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent > h * 0.76) && size > 64) {
+    size -= 2
+    ctx.font = `400 ${size}px "${CHRISTMAS_FONT}"`
+    metrics = ctx.measureText(text)
   }
-  while (widest() > w * 0.94 && size > 64) {
-    size -= 6
-    ctx.font = `700 ${size}px ${family}`
-  }
-  paintLine(ctx, 'MERRY', h * 0.33, w, size)
-  paintLine(ctx, 'CHRISTMAS', h * 0.69, w, size)
-}
-
-function paintElk(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  ctx.clearRect(0, 0, w, h)
-  const cx = w / 2
-  ctx.strokeStyle = '#f6d27a'
-  ctx.lineWidth = 18
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-  const antler = (sign: number) => {
-    ctx.beginPath()
-    ctx.moveTo(cx + sign * 18, 176)
-    ctx.lineTo(cx + sign * 48, 108)
-    ctx.lineTo(cx + sign * 28, 70)
-    ctx.moveTo(cx + sign * 46, 112)
-    ctx.lineTo(cx + sign * 92, 84)
-    ctx.moveTo(cx + sign * 40, 136)
-    ctx.lineTo(cx + sign * 96, 132)
-    ctx.stroke()
-  }
-  antler(1)
-  antler(-1)
-  ctx.fillStyle = '#8a4b22'
-  ctx.beginPath()
-  ctx.ellipse(cx - 62, 206, 26, 16, -0.6, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.ellipse(cx + 62, 206, 26, 16, 0.6, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#c46a32'
-  ctx.beginPath()
-  ctx.ellipse(cx, 226, 52, 46, 0, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#1a100c'
-  ctx.beginPath()
-  ctx.arc(cx - 18, 220, 5, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.arc(cx + 18, 220, 5, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#f0c36a'
-  ctx.beginPath()
-  ctx.arc(cx, 246, 7, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#8a451c'
-  ctx.fillRect(cx - 32, 262, 64, 54)
-  ctx.fillStyle = '#a85a28'
-  ctx.beginPath()
-  ctx.ellipse(cx, 390, 92, 112, 0, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#f4f0e8'
-  ctx.beginPath()
-  ctx.ellipse(cx, 430, 30, 26, 0, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#6d3816'
-  ctx.fillRect(cx - 64, 480, 22, 78)
-  ctx.fillRect(cx - 24, 488, 18, 72)
-  ctx.fillRect(cx + 8, 488, 18, 72)
-  ctx.fillRect(cx + 44, 480, 22, 78)
-}
-
-function paintSanta(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  ctx.clearRect(0, 0, w, h)
-  const cx = w * 0.46
-  ctx.fillStyle = '#f4f7fb'
-  ctx.beginPath()
-  ctx.ellipse(cx, 360, 132, 160, 0, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#d0121c'
-  ctx.beginPath()
-  ctx.moveTo(cx - 116, 230)
-  ctx.lineTo(cx + 18, 42)
-  ctx.lineTo(cx + 132, 214)
-  ctx.closePath()
-  ctx.fill()
-  ctx.fillStyle = '#f7f7f7'
-  ctx.beginPath()
-  ctx.ellipse(cx + 6, 224, 128, 32, -0.08, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.arc(cx + 118, 78, 32, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#f0c2a0'
-  ctx.beginPath()
-  ctx.ellipse(cx + 4, 268, 58, 50, 0, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#1c140f'
-  ctx.beginPath()
-  ctx.arc(cx - 16, 262, 5, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.arc(cx + 24, 260, 5, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#e7a888'
-  ctx.beginPath()
-  ctx.arc(cx + 4, 284, 9, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#ffffff'
-  ctx.beginPath()
-  ctx.ellipse(cx - 20, 302, 28, 14, -0.4, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.ellipse(cx + 32, 300, 28, 14, 0.4, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#c10f18'
-  ctx.fillRect(cx - 100, 470, 200, 90)
-  ctx.fillStyle = '#f6d27a'
-  ctx.beginPath()
-  ctx.arc(cx, 500, 9, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.arc(cx, 530, 9, 0, Math.PI * 2)
-  ctx.fill()
+  // Center the ink, including the capital flourishes and descending strokes.
+  const x = (w - metrics.actualBoundingBoxRight + metrics.actualBoundingBoxLeft) / 2
+  const y = (h + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2
+  ctx.fillText(text, x, y)
 }
 
 function samplePaint(
@@ -503,9 +361,9 @@ export function buildClouds(count: number): Record<ShapeName, Cloud> {
   fillGift(count, gift.positions, gift.colors)
   fillHat(count, hat.positions, hat.colors)
   samplePaint(count, stocking.positions, stocking.colors, 480, 560, 8.2, 11.2, 5.1, 1.15, paintStocking)
-  samplePaint(count, text.positions, text.colors, 1400, 700, 17.4, 8.8, 5.5, 1.8, paintText, true)
-  samplePaint(count, elk.positions, elk.colors, 420, 580, 8.4, 12.6, 5.2, 1.5, paintElk)
-  samplePaint(count, santa.positions, santa.colors, 460, 620, 9.2, 11.6, 5.15, 1.7, paintSanta)
+  samplePaint(count, text.positions, text.colors, 2048, 560, 20.2, 5.52, 5.5, 0.12, paintText, true)
+  fillElk(count, elk.positions, elk.colors)
+  fillSanta(count, santa.positions, santa.colors)
   fillGalaxy(count, gallery.positions, gallery.colors)
   return {
     TREE: tree,

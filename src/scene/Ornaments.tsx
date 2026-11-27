@@ -3,8 +3,9 @@ import { useRef } from 'react'
 import type * as THREE from 'three'
 import { getQuality } from './quality'
 import { getOrnamentPose, getPower } from './sim'
+import { getPalette } from './palette'
 
-const COLORS = ['#f0d48a', '#d0121c', '#81D8D0', '#e8eef5', '#9dffc4', '#c9a36a']
+const COLORS = ['#e6bc4b', '#247844', '#39a65f', '#d8a833', '#5abb70', '#b98d32']
 
 function Ornament({ index }: { index: number }) {
   const ref = useRef<THREE.Group>(null)
@@ -19,7 +20,13 @@ function Ornament({ index }: { index: number }) {
     group.position.set(pose.x, pose.y, pose.z)
     group.rotation.set(pose.rx, pose.ry, pose.rz)
     group.scale.setScalar(Math.max(0.001, pose.s))
-    if (material.current) material.current.emissiveIntensity = 0.12 + getPower() * 0.7
+    if (material.current) {
+      const palette = getPalette()
+      const tint = index % 2 === 0 ? palette.primary : palette.secondary
+      material.current.color.copy(tint)
+      material.current.emissive.copy(tint)
+      material.current.emissiveIntensity = 0.12 + getPower() * 0.7
+    }
   })
 
   return (
@@ -43,10 +50,10 @@ function Ornament({ index }: { index: number }) {
             <sphereGeometry args={[0.26, 24, 16]} />
             <meshStandardMaterial
               ref={material}
-              color="#e7fff8"
+              color="#6bb07a"
               metalness={0.25}
               roughness={0.08}
-              emissive="#81D8D0"
+              emissive="#409b5e"
               emissiveIntensity={0.35}
             />
           </mesh>
@@ -62,16 +69,16 @@ function Ornament({ index }: { index: number }) {
             <coneGeometry args={[0.28, 0.42, 8]} />
             <meshStandardMaterial
               ref={material}
-              color="#bff8ee"
+              color="#46a068"
               metalness={0.4}
               roughness={0.12}
-              emissive="#1E5959"
+              emissive="#195c32"
               emissiveIntensity={0.45}
             />
           </mesh>
           <mesh position={[0, 0.24, 0]}>
             <coneGeometry args={[0.18, 0.32, 8]} />
-            <meshStandardMaterial color="#f3fffb" emissive="#81D8D0" emissiveIntensity={0.4} metalness={0.45} roughness={0.1} />
+            <meshStandardMaterial color="#a8bc68" emissive="#409b5e" emissiveIntensity={0.4} metalness={0.45} roughness={0.1} />
           </mesh>
         </group>
       ) : null}

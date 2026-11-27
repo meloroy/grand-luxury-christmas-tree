@@ -14,7 +14,7 @@ export function ParticleField() {
         color: '#ffffff',
         toneMapped: false,
         transparent: true,
-        opacity: 0.94,
+        opacity: 0.82,
         blending: THREE.NormalBlending,
         depthWrite: false,
       }),

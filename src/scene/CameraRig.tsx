@@ -1,12 +1,12 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { runtime } from '../session/store'
+import { getPhotoTexture, runtime } from '../session/store'
 import { getReveal } from './sim'
 
-const LOOK = new THREE.Vector3(0, 5.7, 0)
+const LOOK = new THREE.Vector3(0, 4.8, 0)
 const FOCUS_AT = new THREE.Vector3(0, 2, 35)
-const spherical = new THREE.Spherical(34, 1.47, 0)
+const spherical = new THREE.Spherical(37, 1.25, 0)
 const offset = new THREE.Vector3()
 const destination = new THREE.Vector3()
 
@@ -14,14 +14,11 @@ export function CameraRig() {
   const camera = useThree((state) => state.camera)
   const gl = useThree((state) => state.gl)
   const size = useThree((state) => state.size)
-  const orbit = useRef({ theta: 0, phi: 1.47, zoom: 1 })
+  const orbit = useRef({ theta: 0, phi: 1.25, zoom: 1 })
   const look = useRef(LOOK.clone())
 
   useEffect(() => {
     const element = gl.domElement
-    let right = false
-    let lastX = 0
-    let lastY = 0
     const points = new Map<number, { x: number; y: number }>()
     let pinch: number | null = null
     let midX = 0
@@ -29,16 +26,16 @@ export function CameraRig() {
 
     const onContext = (event: Event) => event.preventDefault()
     const onDown = (event: PointerEvent) => {
+      if (event.target !== element || event.defaultPrevented) return
+      if (event.pointerType !== 'touch' && event.button !== 0 && event.button !== 2) return
       points.set(event.pointerId, { x: event.clientX, y: event.clientY })
-      if (event.button === 2) {
-        right = true
-        lastX = event.clientX
-        lastY = event.clientY
-      }
+      element.setPointerCapture(event.pointerId)
     }
     const onMove = (event: PointerEvent) => {
-      if (!points.has(event.pointerId)) return
+      const previous = points.get(event.pointerId)
+      if (!previous) return
       points.set(event.pointerId, { x: event.clientX, y: event.clientY })
+      if (runtime.mode === 'FOCUS') return
       if (points.size >= 2) {
         const pair = [...points.values()]
         const dist = Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y)
@@ -55,16 +52,21 @@ export function CameraRig() {
         return
       }
       pinch = null
-      if (!right) return
-      orbit.current.theta -= (event.clientX - lastX) * 0.005
-      orbit.current.phi = THREE.MathUtils.clamp(orbit.current.phi + (event.clientY - lastY) * 0.003, 0.82, 1.72)
-      lastX = event.clientX
-      lastY = event.clientY
+      orbit.current.theta -= (event.clientX - previous.x) * 0.005
+      orbit.current.phi = THREE.MathUtils.clamp(orbit.current.phi + (event.clientY - previous.y) * 0.003, 0.82, 1.72)
     }
     const onUp = (event: PointerEvent) => {
       points.delete(event.pointerId)
-      if (event.button === 2) right = false
+      if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId)
       if (points.size < 2) pinch = null
+    }
+    const onBlur = () => {
+      const activePointers = [...points.keys()]
+      points.clear()
+      pinch = null
+      for (const id of activePointers) {
+        if (element.hasPointerCapture(id)) element.releasePointerCapture(id)
+      }
     }
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
@@ -72,17 +74,23 @@ export function CameraRig() {
     }
 
     element.addEventListener('contextmenu', onContext)
-    element.addEventListener('pointerdown', onDown)
+    // Run after scene controls so pulling the lamp can claim the pointer.
+    window.addEventListener('pointerdown', onDown)
     element.addEventListener('pointermove', onMove)
-    element.addEventListener('pointerup', onUp)
-    element.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    element.addEventListener('lostpointercapture', onUp)
+    window.addEventListener('blur', onBlur)
     element.addEventListener('wheel', onWheel, { passive: false })
     return () => {
       element.removeEventListener('contextmenu', onContext)
-      element.removeEventListener('pointerdown', onDown)
+      onBlur()
+      window.removeEventListener('pointerdown', onDown)
       element.removeEventListener('pointermove', onMove)
-      element.removeEventListener('pointerup', onUp)
-      element.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      element.removeEventListener('lostpointercapture', onUp)
+      window.removeEventListener('blur', onBlur)
       element.removeEventListener('wheel', onWheel)
     }
   }, [gl])
@@ -96,8 +104,13 @@ export function CameraRig() {
     const aspect = size.width / Math.max(1, size.height)
     const focus = runtime.phase === 'play' && runtime.mode === 'FOCUS'
     if (focus) {
-      const frameWidth = 1.12 * 4.5
-      const frameHeight = 1.38 * 4.5
+      const image = getPhotoTexture(runtime.focusIndex)?.image as HTMLImageElement | undefined
+      const ratio = image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 1
+      const width = Math.min(0.96, 1.12 * ratio)
+      const height = width / ratio
+      const border = Math.min(width, height) * 0.025
+      const frameWidth = (width + border * 2) * 4.5
+      const frameHeight = (height + border * 2) * 4.5
       const margin = 1.22
       const tan = Math.tan((34 * Math.PI) / 360)
       const distForHeight = (frameHeight * margin) / (2 * tan)
@@ -112,7 +125,9 @@ export function CameraRig() {
       camera.lookAt(look.current)
       return
     }
-    const base = aspect < 0.85 ? 40 : 34
+    const defaultBase = aspect < 0.85 ? 43 : 37
+    const textDistance = 22 / (2 * Math.tan((34 * Math.PI) / 360) * Math.max(aspect, 0.2))
+    const base = runtime.mode === 'TEXT' ? Math.max(defaultBase, textDistance) : defaultBase
     const reveal = runtime.phase === 'reveal' ? getReveal() : 1
     const ease = 1 - (1 - reveal) ** 3
     const radius = base * orbit.current.zoom * (runtime.phase === 'reveal' ? THREE.MathUtils.lerp(1.28, 1, ease) : 1)

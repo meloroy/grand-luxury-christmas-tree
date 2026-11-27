@@ -4,12 +4,14 @@ const STORE = 'kv'
 export type SavedRecord = {
   generated: true
   photos: string[]
+  captions?: string[]
   savedAt: number
 }
 
 export type DraftRecord = {
   active: boolean
   photos: (string | null)[]
+  captions?: string[]
   updatedAt: number
 }
 

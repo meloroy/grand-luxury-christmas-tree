@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from 'react'
 import * as THREE from 'three'
+import { PHOTO_COUNT } from '../photos/months'
+import { loadChristmasFont } from '../scene/textFont'
 import { requestReveal } from '../scene/reveal'
+import { SHAPES } from '../scene/modes'
 import { idbGet, idbSet, type DraftRecord, type SavedRecord } from './db'
 
 export type Phase = 'boot' | 'choice' | 'upload' | 'opening' | 'reveal' | 'play'
@@ -30,6 +33,9 @@ export type Snapshot = {
   sources: (string | null)[]
   pending: boolean[]
   mode: Mode
+  transitioning: boolean
+  focusIndex: number
+  captions: string[]
   cameraOn: boolean
   cameraBusy: boolean
   cameraError: boolean
@@ -40,12 +46,14 @@ export type Snapshot = {
   track: 1 | 2
 }
 
-const SLOT_COUNT = 16
+const SLOT_COUNT = PHOTO_COUNT
 
 export const runtime = {
   phase: 'boot' as Phase,
   mode: 'TREE' as Mode,
   formed: 'TREE' as Mode,
+  morphing: false,
+  morphId: 0,
   powered: false,
   focusIndex: 0,
   gestureLock: null as Mode | null,
@@ -66,6 +74,9 @@ export const runtime = {
 const photoTextures: (THREE.Texture | null)[] = Array.from({ length: SLOT_COUNT }, () => null)
 const photoSources: (string | null)[] = Array.from({ length: SLOT_COUNT }, () => null)
 const pending: boolean[] = Array.from({ length: SLOT_COUNT }, () => false)
+// Preserve captions from older records as metadata without displaying them.
+const captions: string[] = Array.from({ length: SLOT_COUNT }, () => '')
+let contentRevision = 0
 const slotGen = new Uint32Array(SLOT_COUNT)
 
 let restoring = false
@@ -84,6 +95,9 @@ function blankSnapshot(): Snapshot {
     sources: photoSources.slice(),
     pending: pending.slice(),
     mode: runtime.mode,
+    transitioning: runtime.morphing,
+    focusIndex: runtime.focusIndex,
+    captions: captions.slice(),
     cameraOn: runtime.cameraOn,
     cameraBusy: runtime.cameraBusy,
     cameraError: runtime.cameraError,
@@ -109,6 +123,9 @@ function publish() {
     sources: photoSources.slice(),
     pending: pending.slice(),
     mode: runtime.mode,
+    transitioning: runtime.morphing,
+    focusIndex: runtime.focusIndex,
+    captions: captions.slice(),
     cameraOn: runtime.cameraOn,
     cameraBusy: runtime.cameraBusy,
     cameraError: runtime.cameraError,
@@ -189,6 +206,7 @@ export function addPhotoToScene(texture: THREE.Texture) {
   photoTextures[slot] = texture
   photoSources[slot] = source || null
   pending[slot] = false
+  contentRevision += 1
   publish()
   if (!restoring && runtime.phase === 'upload') scheduleDraft()
 }
@@ -199,17 +217,21 @@ export function removePhotoAt(slot: number) {
   photoTextures[slot] = null
   photoSources[slot] = null
   pending[slot] = false
+  captions[slot] = ''
+  contentRevision += 1
   publish()
   if (runtime.phase === 'upload') scheduleDraft()
 }
 
 function clearPhotos() {
+  contentRevision += 1
   for (let slot = 0; slot < SLOT_COUNT; slot += 1) {
     slotGen[slot] += 1
     photoTextures[slot]?.dispose()
     photoTextures[slot] = null
     photoSources[slot] = null
     pending[slot] = false
+    captions[slot] = ''
   }
 }
 
@@ -222,6 +244,7 @@ function scheduleDraft() {
     const draft: DraftRecord = {
       active: true,
       photos: photoSources.slice(),
+      captions: captions.slice(),
       updatedAt: Date.now(),
     }
     void idbSet('draft', draft).catch(() => {
@@ -232,7 +255,8 @@ function scheduleDraft() {
 }
 
 function isRecord(value: SavedRecord | null): value is SavedRecord {
-  return Boolean(value?.generated && Array.isArray(value.photos) && value.photos.length === SLOT_COUNT)
+  return Boolean(value?.generated && Array.isArray(value.photos) &&
+    (value.photos.length === SLOT_COUNT || value.photos.length === 16))
 }
 
 async function restore(sources: (string | null)[]) {
@@ -264,6 +288,7 @@ async function restore(sources: (string | null)[]) {
 }
 
 function beginShowcase(quick: boolean) {
+  runtime.morphing = false
   runtime.mode = 'TREE'
   runtime.formed = 'TREE'
   runtime.powered = false
@@ -277,7 +302,8 @@ function beginShowcase(quick: boolean) {
 }
 
 async function persistRecord(photos: string[]) {
-  const record: SavedRecord = { generated: true, photos, savedAt: Date.now() }
+  const revision = contentRevision
+  const record: SavedRecord = { generated: true, photos, captions: captions.slice(), savedAt: Date.now() }
   await idbSet('record', record)
   const draft: DraftRecord = {
     active: false,
@@ -285,7 +311,7 @@ async function persistRecord(photos: string[]) {
     updatedAt: Date.now(),
   }
   await idbSet('draft', draft)
-  runtime.saved = true
+  runtime.saved = revision === contentRevision
   runtime.saveError = false
   runtime.hasRecord = true
   publish()
@@ -306,7 +332,7 @@ export function assembleShowcase() {
 
 export async function reopenRecord() {
   runtime.phase = 'opening'
-  runtime.status = 'Opening your tree'
+  runtime.status = '正在打开你的圣诞树…'
   publish()
   try {
     const record = await idbGet<SavedRecord>('record')
@@ -317,7 +343,15 @@ export async function reopenRecord() {
       return
     }
     clearPhotos()
+    restoreCaptions(record.captions)
     await restore(record.photos)
+    if (record.photos.length !== SLOT_COUNT) {
+      runtime.phase = 'upload'
+      runtime.status = '已载入旧记录的前12张照片，请确认1月至12月的对应关系后重新生成。旧记录会保留到重新生成时。'
+      runtime.hasRecord = true
+      publish()
+      return
+    }
     if (countFilled() !== SLOT_COUNT) {
       runtime.phase = 'upload'
       runtime.status = ''
@@ -363,6 +397,7 @@ export function cancelNewRecord() {
 }
 
 export async function confirmNewRecord() {
+  runtime.morphing = false
   clearPhotos()
   runtime.mode = 'TREE'
   runtime.formed = 'TREE'
@@ -385,16 +420,61 @@ export async function confirmNewRecord() {
 
 export function setMode(mode: Mode, source: 'user' | 'gesture' = 'user') {
   if (runtime.phase !== 'play') return
+  const shape = SHAPES.some((item) => item.mode === mode)
+  if (runtime.morphing && shape) return
   if (source === 'user') runtime.gestureLock = mode
   if (runtime.mode === mode) return
+  const fromShape = SHAPES.some((item) => item.mode === runtime.mode)
+  runtime.morphing = shape && fromShape
+  if (runtime.morphing) runtime.morphId += 1
   if (mode === 'FOCUS') {
     const photos = listPhotos().filter((item) => item.type === 'PHOTO')
-    const pick = photos[Math.floor(Math.random() * photos.length)]
+    const pick = photos[0]
     runtime.focusIndex = pick?.index ?? 0
   }
   if (mode !== 'SCATTER' && mode !== 'FOCUS') runtime.formed = mode
   runtime.mode = mode
   publish()
+}
+
+export function nextShape(direction = 1, source: 'user' | 'gesture' = 'user') {
+  if (runtime.phase !== 'play' || runtime.mode === 'FOCUS' || runtime.morphing) return
+  const current = runtime.mode === 'SCATTER' ? runtime.formed : runtime.mode
+  const index = Math.max(0, SHAPES.findIndex((item) => item.mode === current))
+  setMode(SHAPES[(index + direction + SHAPES.length) % SHAPES.length].mode, source)
+}
+
+export function finishMorph() {
+  if (!runtime.morphing) return
+  runtime.morphing = false
+  publish()
+}
+
+function restoreCaptions(saved: unknown) {
+  for (let index = 0; index < SLOT_COUNT; index += 1) {
+    const value = Array.isArray(saved) ? saved[index] : null
+    captions[index] = typeof value === 'string' && value.trim()
+      ? value.slice(0, 120)
+      : ''
+  }
+}
+
+export function focusMonth(index: number, source: 'user' | 'gesture' = 'user') {
+  if (runtime.phase !== 'play' || !Number.isInteger(index) || !photoTextures[index]) return
+  if (runtime.mode !== 'FOCUS' && runtime.mode !== 'SCATTER') runtime.formed = runtime.mode
+  runtime.focusIndex = index
+  runtime.morphing = false
+  runtime.mode = 'FOCUS'
+  runtime.gestureLock = source === 'user' ? 'FOCUS' : null
+  publish()
+}
+
+export function nextPhoto(direction = 1, source: 'user' | 'gesture' = 'user') {
+  if (runtime.phase !== 'play' || runtime.mode !== 'FOCUS') return
+  const photos = listPhotos()
+  if (!photos.length) return
+  const current = Math.max(0, photos.findIndex((photo) => photo.index === runtime.focusIndex))
+  focusMonth(photos[(current + direction + photos.length) % photos.length].index, source)
 }
 
 export function toggleChaos() {
@@ -431,6 +511,7 @@ let booted: Promise<void> | null = null
 
 async function bootOnce() {
   try {
+    await loadChristmasFont()
     const [record, draft] = await Promise.all([
       idbGet<SavedRecord>('record'),
       idbGet<DraftRecord>('draft'),
@@ -438,11 +519,14 @@ async function bootOnce() {
     runtime.hasRecord = isRecord(record)
     if (draft?.active && Array.isArray(draft.photos)) {
       runtime.phase = 'opening'
-      runtime.status = 'Restoring photos'
+      runtime.status = '正在恢复每个月的照片…'
       publish()
+      restoreCaptions(draft.captions)
       await restore(draft.photos)
       runtime.phase = 'upload'
-      runtime.status = ''
+      runtime.status = draft.photos.length > SLOT_COUNT
+        ? '已恢复旧草稿的前12张照片，请确认每个月的照片后生成。'
+        : ''
       publish()
       return
     }

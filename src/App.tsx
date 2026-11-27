@@ -1,11 +1,14 @@
 import { Canvas } from '@react-three/fiber'
-import { Component, useEffect, type ReactNode } from 'react'
+import { Component, useEffect, useRef, type ReactNode } from 'react'
 import { ACESFilmicToneMapping } from 'three'
 import { ConfirmNew, StartGate } from './hud/StartGate'
 import { Controls } from './hud/Controls'
+import { PhotoControls } from './hud/PhotoControls'
+import { PaletteSlider } from './hud/PaletteSlider'
 import { Experience } from './scene/Experience'
 import { getQuality } from './scene/quality'
-import { bootSession } from './session/store'
+import { bootSession, nextPhoto, nextShape, runtime } from './session/store'
+import { startMusic } from './session/music'
 
 class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
@@ -22,6 +25,7 @@ class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean
 
 export default function App() {
   const quality = getQuality()
+  const scenePress = useRef<{ id: number; x: number; y: number; dragged: boolean; released: boolean } | null>(null)
 
   useEffect(() => {
     void bootSession()
@@ -31,6 +35,38 @@ export default function App() {
     <div className="absolute inset-0 overflow-hidden bg-black">
       <SceneBoundary>
         <Canvas
+          tabIndex={0}
+          aria-label="圣诞粒子场景，点击空白切换造型，拖动旋转视角"
+          onPointerDownCapture={(event) => {
+            const previous = scenePress.current
+            if (previous && !previous.released) {
+              previous.dragged = true
+              return
+            }
+            scenePress.current = { id: event.pointerId, x: event.clientX, y: event.clientY, dragged: false, released: false }
+          }}
+          onPointerMoveCapture={(event) => {
+            const press = scenePress.current
+            if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 5) press.dragged = true
+          }}
+          onPointerUpCapture={() => {
+            if (scenePress.current) scenePress.current.released = true
+          }}
+          onPointerCancelCapture={() => { scenePress.current = null }}
+          onPointerMissed={(event) => {
+            const press = scenePress.current
+            scenePress.current = null
+            if (event.type !== 'click' || event.button !== 0 || !press || press.dragged) return
+            startMusic()
+            if (runtime.mode === 'FOCUS') nextPhoto(event.shiftKey ? -1 : 1)
+            else nextShape(event.shiftKey ? -1 : 1)
+          }}
+          onKeyDown={(event) => {
+            if (runtime.mode === 'FOCUS') return
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+            event.preventDefault()
+            nextShape(event.key === 'ArrowLeft' ? -1 : 1)
+          }}
           className="block h-full w-full touch-none"
           camera={{ position: [0, 9.1, 33.8], fov: 34, near: 0.1, far: 280 }}
           dpr={[1, quality.dprMax]}
@@ -50,6 +86,8 @@ export default function App() {
       </SceneBoundary>
       <StartGate />
       <Controls />
+      <PhotoControls />
+      <PaletteSlider />
       <ConfirmNew />
     </div>
   )

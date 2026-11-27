@@ -71,6 +71,7 @@ export function Lamp() {
         position={[8.4, 12.05, 11.5]}
         onPointerDown={(event) => {
           event.stopPropagation()
+          event.nativeEvent.preventDefault()
           drag.current.active = true
           drag.current.startY = event.clientY
           drag.current.peak = 0

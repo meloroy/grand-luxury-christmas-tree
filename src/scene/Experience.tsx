@@ -7,6 +7,7 @@ import { getQuality } from './quality'
 import { Showcase } from './Showcase'
 import { SnowFall } from './Snow'
 import { Starfield } from './Starfield'
+import { PointerTrail } from './PointerTrail'
 
 export function Experience() {
   const phase = useSession().phase
@@ -23,6 +24,7 @@ export function Experience() {
         <>
           <Showcase />
           <Lamp />
+          <PointerTrail />
           <EffectComposer multisampling={quality.multisampling} enableNormalPass={false}>
             <Bloom
               luminanceThreshold={quality.bloomThreshold}
