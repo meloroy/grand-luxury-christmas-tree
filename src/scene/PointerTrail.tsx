@@ -56,10 +56,10 @@ export function PointerTrail() {
         p.y = -p.y;
         float along = p.x * cos(vAngle) + p.y * sin(vAngle);
         float across = -p.x * sin(vAngle) + p.y * cos(vAngle);
-        float head = exp(-((along - 0.18) * (along - 0.18) + across * across) * 85.0);
+        float head = exp(-((along - 0.18) * (along - 0.18) + across * across) * 120.0);
         float tail = exp(-across * across / (vWidth * vWidth))
           * smoothstep(-0.5, 0.18, along) * (1.0 - smoothstep(0.18, 0.48, along));
-        float alpha = (head * 0.85 + tail * 0.35) * vAlpha;
+        float alpha = (head * 0.72 + tail * 0.24) * vAlpha;
         gl_FragColor = vec4(mix(uPrimary, uSecondary, vTint), alpha);
       }
     `,
@@ -115,7 +115,7 @@ export function PointerTrail() {
     const dx = p.x - p.previousX, dy = p.y - p.previousY
     const speed = Math.hypot(dx, dy) / Math.max(dt, 0.001)
     if (enabled && p.active) {
-      dust.carry += dt * Math.min(180, 14 + speed * 0.14) * (p.dragging ? 1.35 : 1)
+      dust.carry += dt * Math.min(120, 10 + speed * 0.09) * (p.dragging ? 1.15 : 1)
       const emit = Math.min(count, Math.floor(dust.carry))
       dust.carry -= emit
       for (let n = 0; n < emit; n += 1) {
@@ -123,15 +123,15 @@ export function PointerTrail() {
         const t = (n + 1) / Math.max(1, emit)
         const angle = Math.random() * Math.PI * 2
         const moving = speed > 30
-        dust.x[i] = p.previousX + dx * t + Math.cos(angle) * 3
-        dust.y[i] = p.previousY + dy * t + Math.sin(angle) * 3
+        dust.x[i] = p.previousX + dx * t + Math.cos(angle) * 1.4
+        dust.y[i] = p.previousY + dy * t + Math.sin(angle) * 1.4
         const inertia = moving ? 0.12 : 0
         dust.vx[i] = dx / Math.max(dt, 0.001) * inertia + Math.cos(angle) * (moving ? 18 : 7)
         dust.vy[i] = dy / Math.max(dt, 0.001) * inertia + Math.sin(angle) * (moving ? 18 : 7)
         dust.age[i] = 0
-        dust.life[i] = (moving ? 0.5 : 0.35) + Math.random() * 0.35
-        dust.size[i] = moving ? Math.min(30, 9 + speed * 0.008) * (0.5 + Math.random() * 0.5) : 4 + Math.random() * 4
-        dust.width[i] = moving ? 0.045 : 0.15
+        dust.life[i] = (moving ? 0.45 : 0.3) + Math.random() * 0.25
+        dust.size[i] = moving ? Math.min(16, 5 + speed * 0.004) * (0.55 + Math.random() * 0.45) : 2 + Math.random() * 2
+        dust.width[i] = moving ? 0.032 : 0.11
         dust.angle[i] = Math.atan2(-dust.vy[i], dust.vx[i])
         dust.tint[i] = Math.random()
       }
@@ -146,7 +146,7 @@ export function PointerTrail() {
       dust.x[i] += dust.vx[i] * dt; dust.y[i] += dust.vy[i] * dt
       dust.position[i * 3] = dust.x[i] / Math.max(1, size.width) * 2 - 1
       dust.position[i * 3 + 1] = 1 - dust.y[i] / Math.max(1, size.height) * 2
-      dust.alpha[i] = fade * fade * 0.85
+      dust.alpha[i] = fade * fade * 0.7
     }
     material.uniforms.uDpr.value = Math.min(1.5, gl.getPixelRatio())
     for (const name of ['position', 'aAlpha', 'aSize', 'aAngle', 'aWidth', 'aTint']) geometry.getAttribute(name).needsUpdate = true
