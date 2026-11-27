@@ -9,7 +9,7 @@ export function PaletteSlider() {
   const [open, setOpen] = useState(false)
   const control = useRef<HTMLElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
-  const slider = useRef<HTMLInputElement>(null)
+  const focusOnOpen = useRef(false)
   const options = useRef<(HTMLButtonElement | null)[]>([])
   const visible = session.phase === 'play' && session.mode !== 'FOCUS'
 
@@ -24,7 +24,7 @@ export function PaletteSlider() {
 
   useEffect(() => {
     if (!open || !visible) return
-    options.current[index]?.focus({ preventScroll: true })
+    if (focusOnOpen.current) options.current[index]?.focus({ preventScroll: true })
     const outside = (event: PointerEvent) => {
       if (event.target instanceof Node && !control.current?.contains(event.target)) setOpen(false)
     }
@@ -48,25 +48,34 @@ export function PaletteSlider() {
 
   if (!visible) return null
 
-  const selectWithKeys = (event: ReactKeyboardEvent<HTMLElement>, radio = true) => {
+  const selectWithKeys = (event: ReactKeyboardEvent<HTMLElement>) => {
     let next = index
-    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = radio ? (index + 1) % PALETTES.length : Math.min(PALETTES.length - 1, index + 1)
-    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = radio ? (index - 1 + PALETTES.length) % PALETTES.length : Math.max(0, index - 1)
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = (index + 1) % PALETTES.length
+    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = (index - 1 + PALETTES.length) % PALETTES.length
     else if (event.key === 'Home') next = 0
     else if (event.key === 'End') next = PALETTES.length - 1
     else return
     event.preventDefault()
     setPalette(next)
-    if (radio) options.current[next]?.focus({ preventScroll: true })
+    options.current[next]?.focus({ preventScroll: true })
   }
 
   return (
     <>
     {open ? <div className="palette-dismiss-layer" aria-hidden="true" onPointerDown={() => setOpen(false)} /> : null}
     <aside ref={control} className="palette-control" aria-label="圣诞树配色">
-      <GameButton ref={trigger} className="palette-trigger" type="button" aria-expanded={open}
+      <button ref={trigger} className="palette-trigger" type="button" aria-expanded={open}
         aria-controls="tree-palette-panel" aria-label={`调整配色，当前为${PALETTES[index].name}`}
-        title={`配色：${PALETTES[index].name}`} onClick={() => setOpen(!open)}>
+        title={`配色：${PALETTES[index].name}`} onClick={(event) => {
+          focusOnOpen.current = event.detail === 0
+          setOpen(!open)
+        }} onKeyDown={(event) => {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+          event.preventDefault()
+          focusOnOpen.current = true
+          setOpen(true)
+          if (open) options.current[index]?.focus({ preventScroll: true })
+        }}>
         <span className="palette-trigger-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1.5-3.3 1.6 1.6 0 0 1 1.2-2.7H18a3 3 0 0 0 3-3c0-5-4-9-9-9Z" stroke="currentColor" strokeWidth="1.2" />
@@ -76,20 +85,15 @@ export function PaletteSlider() {
           </svg>
         </span>
         <span>配色</span>
-      </GameButton>
+      </button>
       {open ? <div id="tree-palette-panel" className="palette-panel">
       <div className="palette-heading">
-        <label id="tree-palette-label" htmlFor="tree-palette">配色</label>
-        <GameButton type="button" onClick={close} aria-label="收起配色面板" title="收起">
+        <span id="tree-palette-label">配色</span>
+        <button className="palette-collapse" type="button" onClick={close} aria-label="收起配色面板" title="收起">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 4 4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </GameButton>
+        </button>
       </div>
       <div className="palette-options">
-        <input ref={slider} id="tree-palette" type="range" min={0} max={PALETTES.length - 1} step={1} value={index}
-          aria-orientation="vertical" aria-valuetext={PALETTES[index].name}
-          aria-label="拖动切换配色"
-          onKeyDown={(event) => selectWithKeys(event, false)}
-          onChange={(event) => setPalette(Number(event.target.value))} />
         <div className="palette-labels" role="radiogroup" aria-labelledby="tree-palette-label" onKeyDown={(event) => selectWithKeys(event)}>
           {PALETTES.map((palette, item) => <GameButton key={palette.name} className="palette-choice" role="radio"
             ref={(node) => { options.current[item] = node }}
@@ -103,7 +107,7 @@ export function PaletteSlider() {
           </GameButton>)}
         </div>
       </div>
-      <output htmlFor="tree-palette" className="sr-only" aria-live="polite">{PALETTES[index].name}</output>
+      <output className="sr-only" aria-live="polite">{PALETTES[index].name}</output>
       </div> : null}
     </aside>
     </>
