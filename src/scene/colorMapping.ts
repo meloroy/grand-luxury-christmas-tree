@@ -2,6 +2,10 @@ import type { getPalette } from './palette'
 
 export type Tint = { r: number; g: number; b: number }
 
+export function hasClassicColors(mode: string) {
+  return mode === 'HAT' || mode === 'SANTA'
+}
+
 /** Recolor surfaces by material role, preserving shadows and ivory details. */
 export function mapPalette(r: number, g: number, b: number, height: number, tree: boolean,
   palette: ReturnType<typeof getPalette>, out: Tint) {

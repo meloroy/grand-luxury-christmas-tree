@@ -1,7 +1,7 @@
 import { PHOTO_COUNT } from '../photos/months'
 import { MORPH_BURST, MORPH_DURATION, scatterAmount } from './morph'
 import { getPalette, stepPalette } from './palette'
-import { mapPalette } from './colorMapping'
+import { hasClassicColors, mapPalette } from './colorMapping'
 import * as THREE from 'three'
 import type { QualityProfile } from './quality'
 import { revealCtrl } from './reveal'
@@ -434,11 +434,22 @@ export function stepSim(dt: number) {
   }
   const colorTarget = scattered ? scatterCol : cloud.colors
   const palette = getPalette()
+  const classic = hasClassicColors(mode)
   for (let i = 0; i < particleCount; i += 1) {
     const o = i * 3
     const height = THREE.MathUtils.clamp(((scattered ? pos[o + 1] : cloud.positions[o + 1]) - TREE.y0) / TREE.height, 0, 1)
-    mapPalette(colorTarget[o], colorTarget[o + 1], colorTarget[o + 2], height, mode === 'TREE', palette, surfaceTint)
-    if (spread > 0) mapPalette(scatterCol[o], scatterCol[o + 1], scatterCol[o + 2], height, false, palette, burstTint)
+    if (classic) {
+      surfaceTint.r = colorTarget[o]
+      surfaceTint.g = colorTarget[o + 1]
+      surfaceTint.b = colorTarget[o + 2]
+      // Keep the character's own red/white colors throughout its burst as well.
+      burstTint.r = surfaceTint.r
+      burstTint.g = surfaceTint.g
+      burstTint.b = surfaceTint.b
+    } else {
+      mapPalette(colorTarget[o], colorTarget[o + 1], colorTarget[o + 2], height, mode === 'TREE', palette, surfaceTint)
+      if (spread > 0) mapPalette(scatterCol[o], scatterCol[o + 1], scatterCol[o + 2], height, false, palette, burstTint)
+    }
     col[o] += (THREE.MathUtils.lerp(surfaceTint.r, burstTint.r, spread) - col[o]) * k
     col[o + 1] += (THREE.MathUtils.lerp(surfaceTint.g, burstTint.g, spread) - col[o + 1]) * k
     col[o + 2] += (THREE.MathUtils.lerp(surfaceTint.b, burstTint.b, spread) - col[o + 2]) * k
@@ -511,7 +522,7 @@ export function writeParticles(mesh: THREE.InstancedMesh) {
     let r = col[o]
     let g = col[o + 1]
     let b = col[o + 2]
-    if (accent[i] && power > 0.35) {
+    if (accent[i] && power > 0.35 && !hasClassicColors(runtime.mode)) {
       const mix = 0.42
       const tr = palette.secondary.r
       const tg = palette.secondary.g
@@ -536,7 +547,7 @@ export function writeRibbons(mesh: THREE.InstancedMesh) {
   const glow = 0.05 + 0.95 * power
   const treeMode = runtime.mode === 'TREE'
   const palette = getPalette()
-  const ribbonBoost = treeMode ? 0.72 : runtime.mode === 'GALLERY' ? 0.4 : 0.015
+  const ribbonBoost = hasClassicColors(runtime.mode) ? 0 : treeMode ? 0.72 : runtime.mode === 'GALLERY' ? 0.4 : 0.015
   const sx = 0.018
   const sy = Math.max(0.025, rStretch)
   const sz = 0.012
