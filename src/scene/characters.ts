@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 
 type Point = [number, number, number]
-type Part = { geometry: THREE.BufferGeometry; color: THREE.Color; weight: number }
+type Part = { geometry: THREE.BufferGeometry; color: THREE.Color; weight: number; sampleOnly?: boolean }
 
 function sculptor() {
   const parts: Part[] = []
@@ -141,50 +141,120 @@ export function fillElk(count: number, positions: Float32Array, colors: Float32A
   sample(parts, count, positions, colors)
 }
 
-export function fillSanta(count: number, positions: Float32Array, colors: Float32Array) {
+export function createSantaSleigh() {
   const { parts, add, oval, tube, ring } = sculptor()
-  const red = '#cf3c42', deepRed = '#9f2634', white = '#eee7d7', skin = '#edb58f', gold = '#d9b565'
-  oval([0, 2.8, 0], [1.7, 2.15, 1.1], red)
-  oval([-0.68, 0.15, 0], [0.54, 0.88, 0.62], deepRed)
-  oval([0.68, 0.15, 0], [0.54, 0.88, 0.62], deepRed)
+  const red = '#ef262f', deepRed = '#bd182b', white = '#fff5e8', skin = '#ffd2af'
+  const gold = '#f5ce83', ivory = '#ffe7ad', dark = '#29232a'
+  const box = (at: Point, dimensions: Point, color: string, weight = 1) =>
+    add(new THREE.BoxGeometry(...dimensions), color, at, [1, 1, 1], 0, weight)
+
+  // A seated, toy-like silhouette: the sack and coat sit behind the low sleigh rail.
+  oval([-2.65, 4.6, -0.65], [1.23, 1.58, 1.02], deepRed, -0.3, 0.85)
+  tube([[-2.65, 5.65, -0.6], [-2.5, 6.08, -0.63], [-2.25, 6.2, -0.62]], 0.34, red, 0.17)
+  ring([-2.48, 5.94, -0.62], 0.27, 0.07, gold)
+  oval([-1, 4.75, 0], [1.48, 1.65, 1.12], red, -0.08, 1.2)
+  oval([-1.12, 3.2, 0.7], [0.83, 0.65, 0.9], deepRed)
+  oval([0.02, 3.12, 0.72], [0.62, 0.57, 0.85], red)
+  oval([-0.85, 2.76, 1.05], [0.64, 0.41, 0.85], dark)
+  oval([0.22, 2.76, 1.05], [0.54, 0.4, 0.81], dark)
+  ring([-1, 3.65, 0], 1.23, 0.2, white, [1.1, 1, 0.82])
+  box([-0.92, 4.48, 1.1], [2.55, 0.3, 0.13], dark)
+  box([-0.67, 4.48, 1.22], [0.54, 0.48, 0.16], gold, 2)
+  box([-0.67, 4.48, 1.32], [0.28, 0.24, 0.045], dark)
+  tube([[-2.12, 5.65, 0], [-2.66, 5.0, 0.54], [-2.16, 4.46, 1.02]], 0.49, red, 0.37)
+  ring([-2.13, 4.38, 1.03], 0.35, 0.16, white)
+  oval([-1.99, 4.09, 1.26], [0.43, 0.42, 0.35], red, 0.2)
+  tube([[0.15, 5.76, 0], [0.79, 6.43, 0.05], [1.17, 7.36, 0.08]], 0.48, red, 0.33)
+  ring([1.18, 7.4, 0.08], 0.35, 0.16, white)
+  oval([1.3, 7.96, 0.1], [0.44, 0.6, 0.34], red, -0.22, 1.6)
+  oval([0.96, 7.83, 0.32], [0.23, 0.31, 0.22], red, -0.45, 1.5)
+
+  // Oversized face, soft scalloped beard, smiling eyes and an open smile.
+  const headStart = parts.length
+  oval([-1, 7.3, 0.15], [1.09, 1.12, 0.9], skin, 0, 0.8)
+  add(new THREE.SphereGeometry(1, 24, 18, 0, Math.PI), skin, [-1, 7.3, 0.15], [1.09, 1.12, 0.9], 0, 5)
+  parts[parts.length - 1].sampleOnly = true
   for (const side of [-1, 1]) {
-    oval([side * 0.72, -0.65, 0.25], [0.64, 0.47, 0.91], '#302e32')
-    ring([side * 0.69, -0.25, 0], 0.49, 0.12, white, [1, 1, 1.1])
+    oval([-1 + side * 1.02, 7.22, 0.2], [0.23, 0.34, 0.25], skin)
+    oval([-1 + side * 0.68, 7.14, 0.91], [0.29, 0.22, 0.14], '#f3a58e', 0, 2)
   }
-  ring([0, 0.95, 0], 1.3, 0.2, white, [1.15, 1, 0.77])
-  ring([0, 2.05, 0], 1.58, 0.14, '#3f3030', [1, 1.2, 0.67])
-  add(new THREE.BoxGeometry(0.63, 0.4, 0.16), gold, [0, 2.05, 1.15])
-  add(new THREE.BoxGeometry(0.33, 0.2, 0.04), '#423432', [0, 2.05, 1.25])
-  tube([[-1.3, 4.1, 0], [-2.1, 3.75, 0], [-2.2, 2.85, 0.2]], 0.43, red, 0.3)
-  tube([[1.3, 4.1, 0], [2.25, 4.7, 0], [2.45, 5.85, 0.08]], 0.43, red, 0.28)
-  ring([-2.2, 2.95, 0.2], 0.3, 0.13, white)
-  ring([2.45, 5.9, 0.08], 0.29, 0.13, white)
-  oval([-2.2, 2.57, 0.26], [0.35, 0.42, 0.31], deepRed)
-  oval([2.45, 6.27, 0.1], [0.34, 0.43, 0.29], red)
-  oval([2.13, 6.2, 0.2], [0.17, 0.25, 0.19], red, -0.5)
-  oval([-1.85, 3.4, -0.7], [0.85, 1.4, 0.75], '#83543a', -0.3)
-  oval([0, 5.96, 0.04], [1.03, 1.15, 0.85], skin)
+  oval([-1, 6.33, 0.64], [1.21, 0.99, 0.68], white, 0, 0.8)
+  add(new THREE.SphereGeometry(1, 24, 18, 0, Math.PI), white, [-1, 6.33, 0.64], [1.21, 0.99, 0.68], 0, 3.5)
+  parts[parts.length - 1].sampleOnly = true
+  for (let i = 0; i < 7; i += 1) {
+    const angle = i / 6 * Math.PI
+    oval([-1 + Math.cos(angle) * 0.93, 6.66 - Math.sin(angle) * 0.8, 0.98],
+      [0.39, 0.44, 0.29], i % 2 ? '#f1e9dc' : white, Math.cos(angle) * 0.2, 1.5)
+  }
+  oval([-1, 6.95, 1.3], [0.34, 0.24, 0.1], '#7b2430', 0, 6)
+  oval([-0.98, 6.83, 1.39], [0.22, 0.095, 0.035], '#fa746b', 0, 5)
   for (const side of [-1, 1]) {
-    oval([side * 0.98, 6, 0.08], [0.21, 0.35, 0.24], skin)
-    oval([side * 0.64, 5.96, 0.73], [0.26, 0.2, 0.13], '#dc897e')
+    const eye = -1 + side * 0.4
+    tube([[eye - 0.13, 7.49, 1.01], [eye, 7.61, 1.05], [eye + 0.13, 7.49, 1.01]], 0.055, dark, 0.047, 12)
+    tube([[-1 + side * 0.21, 7.88, 0.9], [-1 + side * 0.43, 7.98, 0.91], [-1 + side * 0.68, 7.9, 0.82]], 0.09, white, 0.055, 5)
+    oval([-1 + side * 0.36, 7.22, 1.24], [0.49, 0.2, 0.18], white, side * 0.25, 2.8)
   }
-  const beardProfile = [[0, 0], [0.3, 0.2], [0.7, 0.65], [1.03, 1.2], [1.08, 1.65], [0.79, 1.95], [0, 2.05]]
-  add(new THREE.LatheGeometry(beardProfile.map(([x, y]) => new THREE.Vector2(x, y)), 28), white, [0, 3.8, 0.55], [1, 1, 0.63])
-  for (let i = 0; i < 9; i += 1) {
-    const angle = (i / 8) * Math.PI
-    oval([Math.cos(angle) * 0.77, 4.85 - Math.sin(angle) * 0.6, 0.95], [0.22, 0.44, 0.15], i % 2 ? '#d6d3cc' : white, Math.cos(angle) * 0.4)
+  oval([-1, 7.3, 1.26], [0.24, 0.19, 0.23], '#f79b6a', 0, 5)
+  tube([[-1, 8.15, 0.03], [-1.22, 9.12, 0], [-1.92, 9.66, 0.02], [-2.58, 9.23, 0.05], [-2.8, 8.7, 0.12]], 1.05, red, 0.025)
+  ring([-1, 8.17, 0.13], 1.07, 0.23, white, [1.03, 1, 0.85])
+  oval([-2.82, 8.63, 0.12], [0.36, 0.39, 0.36], white, 0, 2)
+  for (let i = headStart; i < parts.length; i += 1) {
+    parts[i].geometry.translate(1, -7.2, -0.1).scale(1.18, 1.08, 1.1).translate(-1, 7.35, 0.1)
   }
-  oval([0, 5.61, 0.98], [0.23, 0.12, 0.08], '#8c4943', 0, 4)
-  for (const side of [-1, 1]) {
-    oval([side * 0.39, 6.4, 0.81], [0.14, 0.095, 0.045], '#413637', 0, 7)
-    oval([side * 0.38, 6.43, 0.855], [0.035, 0.03, 0.015], white, 0, 10)
-    tube([[side * 0.15, 6.62, 0.8], [side * 0.4, 6.72, 0.79], [side * 0.66, 6.62, 0.7]], 0.07, white, 0.025, 3)
-    tube([[0, 5.9, 1.13], [side * 0.3, 5.78, 1.14], [side * 0.68, 5.89, 0.97]], 0.17, white, 0.025, 3)
+
+  const gift = (at: Point, dimensions: Point, paper: string, ribbon: string) => {
+    const [x, y, z] = at, [w, h, d] = dimensions
+    box(at, dimensions, paper, 0.9)
+    box([x, y, z], [w * 0.18, h + 0.04, d + 0.045], ribbon, 2)
+    box([x, y, z], [w + 0.045, h * 0.18, d + 0.055], ribbon, 2)
+    const top = y + h / 2
+    for (const side of [-1, 1]) tube([[x, top + 0.06, z], [x + side * 0.35, top + 0.38, z], [x + side * 0.52, top + 0.12, z], [x, top + 0.04, z]], 0.075, ribbon, 0.06, 2)
+    oval([x, top + 0.1, z], [0.14, 0.12, 0.13], ribbon, 0, 2)
   }
-  oval([0, 6.05, 0.99], [0.21, 0.18, 0.23], '#e8a17f', 0, 4)
-  tube([[0, 7.02, 0], [0.05, 8.05, 0], [0.8, 8.62, 0], [1.48, 8.35, 0], [1.63, 7.85, 0.12]], 1.02, red, 0.025)
-  ring([0, 7.02, 0], 1.02, 0.18, white, [1, 1, 0.88])
-  oval([1.64, 7.82, 0.12], [0.31, 0.34, 0.31], white, 0, 2)
-  for (const y of [3.1, 3.7, 4.25]) oval([0, y, 1.07], [0.085, 0.085, 0.055], gold, 0, 3)
-  sample(parts, count, positions, colors)
+  gift([2.25, 5.1, -0.22], [1.45, 1.65, 1.23], '#16a06b', red)
+  gift([1.18, 4.35, 0.93], [1.12, 1.18, 0.85], '#f6ba39', '#168fcb')
+  gift([3.05, 4.15, 0.82], [0.92, 1.12, 0.84], red, gold)
+
+  // A red sleigh with a dipping seat rail, ivory-gold scrolls and paired runners.
+  const side = new THREE.Shape()
+  side.moveTo(-4.02, 3.62)
+  side.bezierCurveTo(-4.34, 4.42, -3.0, 4.53, -2.66, 3.52)
+  side.bezierCurveTo(-2.05, 1.96, -0.7, 1.93, 0.18, 2.67)
+  side.bezierCurveTo(1.0, 3.33, 1.2, 4.06, 2.03, 4.19)
+  side.bezierCurveTo(2.77, 4.33, 3.47, 4.3, 3.94, 4.13)
+  side.bezierCurveTo(4.73, 3.65, 4.62, 1.42, 3.7, 1.03)
+  side.bezierCurveTo(1.88, 0.57, -1.9, 0.62, -3.39, 1.02)
+  side.bezierCurveTo(-4.03, 1.42, -3.73, 2.78, -4.02, 3.62)
+  const shell = new THREE.ExtrudeGeometry(side, { depth: 2.7, bevelEnabled: true, bevelSize: 0.12, bevelThickness: 0.12, bevelSegments: 3, steps: 1, curveSegments: 20 })
+  add(shell, red, [0, 0, -1.35], [1, 1, 1], 0, 0.62)
+  for (const z of [-1.52, 1.52]) {
+    tube([[-3.94, 3.64, z], [-3.72, 4.15, z], [-3.15, 4.1, z], [-2.67, 3.51, z], [-1.93, 2.41, z], [-0.86, 2.29, z], [0.18, 2.75, z], [1.27, 3.94, z], [2.02, 4.2, z], [3.55, 4.2, z]], 0.16, ivory, 0.15, 2.5)
+    tube([[-3.43, 1.05, z], [-1.5, 0.78, z], [1.5, 0.78, z], [3.7, 1.07, z]], 0.12, gold, 0.12, 2)
+    tube([[-3.95, 0.03, z * 0.8], [-3.85, -0.44, z * 0.8], [-2.5, -0.61, z * 0.8], [1.6, -0.61, z * 0.8], [3.86, -0.38, z * 0.8], [4.62, 0.17, z * 0.8], [4.72, 1.11, z * 0.8], [4.25, 1.65, z * 0.8], [3.89, 1.3, z * 0.8]], 0.17, ivory, 0.13, 2.5)
+    for (const x of [-2.55, -0.55, 1.6]) tube([[x, 0.93, z * 0.8], [x - 0.12, 0.35, z * 0.8], [x + 0.2, 0.01, z * 0.8], [x + 0.43, 0.3, z * 0.8], [x + 0.15, 0.53, z * 0.8]], 0.12, gold, 0.1, 2)
+    tube([[2.72, 4.19, z], [2.26, 4.21, z], [1.89, 3.96, z], [1.98, 3.55, z], [2.37, 3.51, z], [2.49, 3.8, z], [2.27, 3.91, z]], 0.17, ivory, 0.11, 2.5)
+  }
+  const star = (x: number, y: number, radius: number, z: number) => {
+    const shape = new THREE.Shape()
+    for (let i = 0; i < 10; i += 1) {
+      const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? radius * 0.43 : radius
+      const sx = Math.cos(a) * r, sy = Math.sin(a) * r
+      if (i === 0) shape.moveTo(sx, sy)
+      else shape.lineTo(sx, sy)
+    }
+    shape.closePath()
+    add(new THREE.ExtrudeGeometry(shape, { depth: 0.025, bevelEnabled: false }), white, [x, y, z], [1, 1, 1], 0, 5)
+  }
+  for (const z of [-1.52, 1.52]) {
+    star(-3.15, 2.75, 0.3, z)
+    star(-1.83, 1.66, 0.22, z)
+    star(-0.1, 1.6, 0.28, z)
+    star(1.55, 2.51, 0.32, z)
+    star(3.35, 2.65, 0.24, z)
+  }
+  return parts
+}
+
+export function fillSanta(count: number, positions: Float32Array, colors: Float32Array) {
+  sample(createSantaSleigh(), count, positions, colors)
 }

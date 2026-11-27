@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { getQuality } from './quality'
 import { writeParticles } from './sim'
+import { runtime } from '../session/store'
 
 export function ParticleField() {
   const quality = getQuality()
@@ -38,7 +39,9 @@ export function ParticleField() {
     }
   }, [geometry, material])
 
-  useFrame(() => {
+  useFrame((_, delta) => {
+    const surface = runtime.phase === 'play' && runtime.mode === 'SANTA' && !runtime.morphing
+    material.opacity = THREE.MathUtils.damp(material.opacity, surface ? 0.12 : 0.82, 7, delta)
     const mesh = ref.current
     if (mesh?.instanceColor) writeParticles(mesh)
   })

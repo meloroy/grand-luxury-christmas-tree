@@ -12,6 +12,7 @@ import { getPower, mountSim, stepSim } from './sim'
 import { SnowGround } from './Snow'
 import { Star } from './Star'
 import { getPalette } from './palette'
+import { SantaSleigh } from './SantaSleigh'
 
 
 export function Showcase() {
@@ -46,7 +47,7 @@ export function Showcase() {
     const glow = getPower()
     if (accent.current) accent.current.color.copy(getPalette().primary)
     if (fill.current) fill.current.intensity = 0.6 + glow * 7
-    if (accent.current) accent.current.intensity = glow * 3.2 * (0.65 + 0.35 * Math.sin(state.clock.elapsedTime * 1.6))
+    if (accent.current) accent.current.intensity = runtime.mode === 'SANTA' ? 0 : glow * 3.2 * (0.65 + 0.35 * Math.sin(state.clock.elapsedTime * 1.6))
     if (ambient.current) ambient.current.intensity = 0.05 + glow * 0.12
   }, -1)
 
@@ -58,6 +59,7 @@ export function Showcase() {
       <group ref={group} name="mainGroup">
         <SnowGround />
         <ParticleField />
+        <SantaSleigh />
         <Ribbons />
         <PhotoWall />
         <Ornaments />
