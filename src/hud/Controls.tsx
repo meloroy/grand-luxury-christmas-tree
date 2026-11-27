@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useHandCamera } from '../gestures/useHandCamera'
 import { startMusic, toggleMusic } from '../session/music'
 import { requestNewRecord, runtime, setMode, useSession } from '../session/store'
+import { GameButton } from './GameButton'
 
 export function Controls() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -30,7 +31,7 @@ export function Controls() {
       />
       <div className="dock" hidden={hud.mode === 'FOCUS'}>
         <div className="dock-actions">
-          <button
+          <GameButton
             type="button"
             className={`hud-button dock-button ${hud.mode === 'FOCUS' ? 'is-on' : ''}`}
             onClick={() => {
@@ -40,10 +41,12 @@ export function Controls() {
             }}
           >
             <span>查看照片</span>
-          </button>
-          <button
+          </GameButton>
+          <GameButton
             type="button"
             className={`hud-button dock-button ${hud.cameraBusy ? 'is-busy' : ''} ${hud.cameraError ? 'is-error' : ''}`}
+            aria-pressed={hud.cameraOn}
+            aria-busy={hud.cameraBusy}
             onClick={() => {
               startMusic()
               if (hud.cameraOn || hud.cameraBusy) stop()
@@ -51,20 +54,20 @@ export function Controls() {
             }}
           >
             <span>{hud.cameraBusy ? '取消开启' : hud.cameraOn ? '关闭手势' : '开启手势'}</span>
-          </button>
-            <button
-              type="button"
-              className="hud-button dock-button"
-              onClick={() => {
-                startMusic()
-                toggleMusic()
-              }}
-            >
-              <span>切换音乐</span>
-            </button>
-          <button type="button" className="hud-button dock-button" onClick={() => requestNewRecord()}>
+          </GameButton>
+          <GameButton
+            type="button"
+            className="hud-button dock-button"
+            onClick={() => {
+              startMusic()
+              toggleMusic()
+            }}
+          >
+            <span>切换音乐</span>
+          </GameButton>
+          <GameButton type="button" className="hud-button dock-button" onClick={() => requestNewRecord()}>
             <span>新建回忆</span>
-          </button>
+          </GameButton>
         </div>
       </div>
     </>

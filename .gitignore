@@ -6,3 +6,4 @@ dist
 public/mediapipe
 .cursor
 *.tsbuildinfo
+.taste-skill

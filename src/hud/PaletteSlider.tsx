@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from 'react'
 import { PALETTES, setPalette, usePalette } from '../scene/palette'
 import { useSession } from '../session/store'
+import { GameButton } from './GameButton'
 
 export function PaletteSlider() {
   const index = usePalette()
@@ -42,7 +44,7 @@ export function PaletteSlider() {
 
   return (
     <aside ref={control} className="palette-control" aria-label="圣诞树配色">
-      <button ref={trigger} className="palette-trigger" type="button" aria-expanded={open}
+      <GameButton ref={trigger} className="palette-trigger" type="button" aria-expanded={open}
         aria-controls="tree-palette-panel" aria-label={`调整配色，当前为${PALETTES[index].name}`}
         title={`配色：${PALETTES[index].name}`} onClick={() => setOpen(!open)}>
         <span className="palette-trigger-icon">
@@ -54,13 +56,13 @@ export function PaletteSlider() {
           </svg>
         </span>
         <span>配色</span>
-      </button>
+      </GameButton>
       {open ? <div id="tree-palette-panel" className="palette-panel">
       <div className="palette-heading">
         <label htmlFor="tree-palette">配色</label>
-        <button type="button" onClick={close} aria-label="收起配色面板" title="收起">
+        <GameButton type="button" onClick={close} aria-label="收起配色面板" title="收起">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m10 4-4 4 4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </button>
+        </GameButton>
       </div>
       <div className="palette-options">
         <input ref={slider} id="tree-palette" type="range" min={0} max={PALETTES.length - 1} step={1} value={index}
@@ -77,4 +79,3 @@ export function PaletteSlider() {
     </aside>
   )
 }
-import { useEffect, useRef, useState } from 'react'

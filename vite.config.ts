@@ -30,7 +30,7 @@ function spaFallback(): Plugin {
 export default defineConfig({
   base: '/grand-luxury-christmas-tree/',
   plugins: [react(), tailwindcss(), mediapipeWasm(), spaFallback()],
-  server: { host: '0.0.0.0', port: 5173 },
+  server: { host: '0.0.0.0', port: 5173, watch: { ignored: ['**/.taste-skill/**'] } },
   preview: { host: '0.0.0.0', port: 4173 },
   build: { target: 'es2022', chunkSizeWarningLimit: 1600 },
 })

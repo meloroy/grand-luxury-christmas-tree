@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { nextPhoto, runtime, setMode, useSession } from '../session/store'
+import { GameButton } from './GameButton'
 
 export function PhotoControls() {
   const snap = useSession()
@@ -48,15 +49,15 @@ export function PhotoControls() {
   if (!active) return null
   return (
     <nav className="photo-navigation" aria-label="照片浏览">
-      <button ref={previous} type="button" aria-label="上一张照片" title="上一张" onClick={() => nextPhoto(-1)}>
+      <GameButton ref={previous} type="button" aria-label="上一张照片" title="上一张" onClick={() => nextPhoto(-1)}>
         <svg viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true"><path d="m12 5-5 5 5 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </button>
-      <button type="button" aria-label="下一张照片" title="下一张" onClick={() => nextPhoto(1)}>
+      </GameButton>
+      <GameButton type="button" aria-label="下一张照片" title="下一张" onClick={() => nextPhoto(1)}>
         <svg viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true"><path d="m8 5 5 5-5 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </button>
-      <button type="button" aria-label="返回场景" title="返回场景" onClick={() => setMode(runtime.formed, 'user')}>
+      </GameButton>
+      <GameButton type="button" aria-label="返回场景" title="返回场景" onClick={() => setMode(runtime.formed, 'user')}>
         <svg viewBox="0 0 20 20" width="16" height="16" fill="none" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
-      </button>
+      </GameButton>
     </nav>
   )
 }

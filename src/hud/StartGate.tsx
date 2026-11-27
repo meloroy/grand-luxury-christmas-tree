@@ -2,6 +2,7 @@ import { useRef, type ChangeEvent } from 'react'
 import { uploadPhoto } from '../photos/uploadPhoto'
 import { MONTHS, PHOTO_COUNT } from '../photos/months'
 import { pauseMusic, startMusic } from '../session/music'
+import { GameButton } from './GameButton'
 import {
   assembleShowcase,
   cancelNewRecord,
@@ -47,7 +48,7 @@ export function StartGate() {
 
   return (
     <div className={`gate ${snap.phase === 'upload' ? 'is-upload' : 'is-center'}`}>
-      <input ref={picker} className="sr-only" type="file" accept="image/*" multiple onChange={onPhotos} />
+      <input ref={picker} className="sr-only" type="file" accept="image/*" multiple tabIndex={-1} aria-label="选择回忆照片" onChange={onPhotos} />
       {snap.phase === 'boot' || snap.phase === 'opening' ? (
         <div className="gate-card gate-card-quiet">
           <p className="eyebrow">圣诞回忆</p>
@@ -60,7 +61,7 @@ export function StartGate() {
           <h1>这一年的回忆已保存</h1>
           <p className="lede">打开保存在此设备上的圣诞树，或用十二个月的照片开始新的回忆。</p>
           <div className="choice-row">
-            <button
+            <GameButton
               type="button"
               className="hud-button is-on"
               onClick={() => {
@@ -69,10 +70,10 @@ export function StartGate() {
               }}
             >
               打开回忆
-            </button>
-            <button type="button" className="hud-button" onClick={() => requestNewRecord()}>
+            </GameButton>
+            <GameButton type="button" className="hud-button" onClick={() => requestNewRecord()}>
               新建回忆
-            </button>
+            </GameButton>
           </div>
         </div>
       ) : null}
@@ -86,11 +87,11 @@ export function StartGate() {
             {snap.filled}/{PHOTO_COUNT}
           </p>
           <div className="slot-actions">
-            <button type="button" className="hud-button" onClick={() => openSlot(null)} disabled={snap.sources.every((source, index) => source || snap.pending[index])}>
+            <GameButton type="button" className="hud-button" onClick={() => openSlot(null)} disabled={snap.sources.every((source, index) => source || snap.pending[index])}>
               批量上传照片
-            </button>
+            </GameButton>
             {snap.hasRecord ? (
-              <button
+              <GameButton
                 type="button"
                 className="hud-button"
                 onClick={() => {
@@ -99,14 +100,14 @@ export function StartGate() {
                 }}
               >
                 打开已存回忆
-              </button>
+              </GameButton>
             ) : null}
           </div>
           <div className="slots">
             {snap.sources.map((source, index) => (
               <div className="slot" key={index}>
                 <span className="month-label">{MONTHS[index]}</span>
-                <button
+                <GameButton
                   type="button"
                   className="slot-face"
                   disabled={snap.pending[index]}
@@ -115,17 +116,17 @@ export function StartGate() {
                 >
                   {source ? <img src={source} alt="" /> : <span>+</span>}
                   {snap.pending[index] ? <span className="slot-wait">…</span> : null}
-                </button>
+                </GameButton>
                 {source ? (
-                  <button type="button" className="slot-remove" aria-label={`移除${MONTHS[index]}的照片`} onClick={() => removePhotoAt(index)}>
+                  <GameButton type="button" className="slot-remove" aria-label={`移除${MONTHS[index]}的照片`} onClick={() => removePhotoAt(index)}>
                     移除照片
-                  </button>
+                  </GameButton>
                 ) : null}
               </div>
             ))}
           </div>
           <div className="gate-bar">
-            <button
+            <GameButton
               type="button"
               className={`hud-button assemble ${ready ? 'is-on assemble-ready' : ''}`}
               disabled={!ready}
@@ -135,7 +136,7 @@ export function StartGate() {
               }}
             >
               点亮圣诞树
-            </button>
+            </GameButton>
           </div>
         </div>
       ) : null}
@@ -153,10 +154,10 @@ export function ConfirmNew() {
         <h2 id="confirm-title">开始记录新的一年？</h2>
         <p className="lede">旧回忆会继续保存在此设备上，直到你上传十二个月的照片并点亮新的圣诞树。</p>
         <div className="choice-row">
-          <button type="button" className="hud-button is-on" onClick={() => cancelNewRecord()}>
+          <GameButton type="button" className="hud-button is-on" onClick={() => cancelNewRecord()}>
             保留当前回忆
-          </button>
-          <button
+          </GameButton>
+          <GameButton
             type="button"
             className="hud-button"
             onClick={() => {
@@ -165,7 +166,7 @@ export function ConfirmNew() {
             }}
           >
             开始新回忆
-          </button>
+          </GameButton>
         </div>
       </div>
     </div>

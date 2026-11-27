@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber'
-import { Component, useEffect, useRef, type ReactNode } from 'react'
+import { Component, useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { ACESFilmicToneMapping } from 'three'
 import { ConfirmNew, StartGate } from './hud/StartGate'
 import { Controls } from './hud/Controls'
@@ -9,6 +9,7 @@ import { Experience } from './scene/Experience'
 import { getQuality } from './scene/quality'
 import { bootSession, nextPhoto, nextShape, runtime } from './session/store'
 import { startMusic } from './session/music'
+import { PALETTES, usePalette } from './scene/palette'
 
 class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
@@ -25,6 +26,7 @@ class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean
 
 export default function App() {
   const quality = getQuality()
+  const palette = PALETTES[usePalette()]
   const scenePress = useRef<{ id: number; x: number; y: number; dragged: boolean; released: boolean } | null>(null)
 
   useEffect(() => {
@@ -32,7 +34,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-black">
+    <div className="absolute inset-0 overflow-hidden bg-black" style={{ '--ui-accent': palette.swatch } as CSSProperties}>
       <SceneBoundary>
         <Canvas
           tabIndex={0}
@@ -67,7 +69,7 @@ export default function App() {
             event.preventDefault()
             nextShape(event.key === 'ArrowLeft' ? -1 : 1)
           }}
-          className="block h-full w-full touch-none"
+          className="scene-canvas block h-full w-full touch-none"
           camera={{ position: [0, 9.1, 33.8], fov: 34, near: 0.1, far: 280 }}
           dpr={[1, quality.dprMax]}
           gl={{
